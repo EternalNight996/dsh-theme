@@ -69,8 +69,8 @@ After install **restart dsh web**: a 🎨 Theme button appears at the sidebar fo
 
 ### 入口 / Entry points
 - 侧边栏底部「🎨 主题」按钮（rail 窄条态仅图标）→ 主题面板弹窗。Sidebar footer 🎨 button (rail shows icon only) → theme panel.
-- **设置 → 主题** 顶层分区（id `deep-theme`, order 25）。Settings → Theme (top-level).
-- 当前主题持久化到 `deep-theme` 命名空间，重启保留。Persisted in `deep-theme`, survives restart.
+- **设置 → 主题** 顶层分区（id `dsh-theme`, order 25）。Settings → Theme (top-level).
+- 当前主题持久化到 `dsh-theme` 命名空间，重启保留。Persisted in `dsh-theme`, survives restart.
 - 全部 UI 用 `var(--dsw-alias-*)`，明暗自适应。All UI uses `var(--dsw-alias-*)`, light/dark native.
 
 ---
@@ -90,9 +90,9 @@ npm run gen:bg       # 重新生成内置背景图（可选）
 
 ## 📜 日志更新 / Changelog
 
-- **v0.1.0** 初始主题皮肤插件：背景层 + 设置 → 主题 + 侧边栏「🎨 主题」按钮；三种皮肤形态（内置主题 / 图片 / 视频环绕跟随）。Initial plugin: background layer, Settings → Theme, sidebar 🎨 button; three skin modes.
-- **v0.1.1+** 视频**两种模式**（跟随鼠标 / 循环播放）；**蒙层/透明可调**（主题面板、对话栏、背景压暗）；导入图片/视频**持久化** + 两步删除；字体/按钮颜色**随 DSH 通用外观适配**；跟随鼠标**性能优化**（seek 节流 / 后台暂停 / 空闲停帧）。Video two modes; adjustable mask/transparency; import persistence + two-step delete; font/buttons adapt to DSH appearance; follow-mouse perf.
-- **v0.1.2+** 导入**库**（多张新增/删除）、**default.png/default.mp4 默认皮肤不可删**、导入图片/视频按类型存入 `import-images` / `import-videos`、导入皮肤以**文件名命名（≤15 字）**、移除内置环绕少女。Import library (multi add/delete), protected default skins, per-type import dirs, filename-named skins, removed built-in orbit video.
+- **v0.1.0** 初始发布：背景层 + 设置 → 主题 + 侧边栏「🎨 主题」按钮；三种皮肤形态（内置主题 / 图片 / 视频环绕跟随）；视频**跟随鼠标**（360° 环绕跟随帧）与**循环播放**两类；**透明可调**（主题面板 / 对话栏 / 背景压暗）；导入图片/视频**持久化**到 `import-images` / `import-videos` + 两步删除；**default.png / default.mp4 默认皮肤不可删**；导入皮肤以**文件名命名（≤15 字）**；字体/按钮颜色随 DSH 外观适配；跟随鼠标性能优化（seek 节流 / 后台暂停 / 空闲停帧）。
+
+Initial release: background layer, Settings → Theme, sidebar 🎨 button; three skin modes (built-in / image / 360°-follow video); video follow-mouse & loop; adjustable transparency (panel / dialog / dim); import persistence to `import-images`/`import-videos` + two-step delete; non-deletable `default.png`/`default.mp4`; filename-named skins (≤15 chars); font/buttons adapt to DSH appearance; follow-mouse perf (throttled seeks / background pause / idle stop).
 
 ---
 
