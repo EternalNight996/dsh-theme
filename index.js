@@ -1,13 +1,13 @@
 // 主题皮肤（host 侧）：设置命名空间 + 静态资源服务 + 导入持久化。
 //
 // 职责：
-// 1. 注册 `deep-theme` 设置命名空间（enabled / mode / builtinId / imageSrc /
-//    imageFit / imageMask / videoSrc / videoFollow / dim）。当前主题持久化到
-//    settings 文件，重启保留。
-// 2. 注册 `/deep-theme/assets/*` 静态路由：从本插件的 assets/ 目录提供内置图片
-//    皮肤与默认视频（main-compressed.mp4），供客户端背景层直接引用。
-// 3. 注册 `/deep-theme/api/import`：客户端把导入的图片/视频（base64 data URL）
-//    交给 host，写入本插件 assets/imports/ 目录，返回可持久化的内部 URL。
+// 1. 注册 `dsh-theme` 设置命名空间（enabled / mode / builtinId / imageSrc /
+//    imageFit / videoSrc / videoMode / dim / themeAlpha / dialogAlpha /
+//    importedImages / importedVideos）。当前主题持久化到 settings 文件，重启保留。
+// 2. 注册 `/dsh-theme/assets/*` 静态路由：从本插件的 assets/ 目录提供内置图片
+//    皮肤与默认视频（default.png / default.mp4），供客户端背景层直接引用。
+// 3. 注册 `/dsh-theme/api/import`：客户端把导入的图片/视频（base64 data URL）
+//    交给 host，写入本插件 assets/import-images 或 import-videos 目录，返回持久化 URL。
 //    —— 导入文件落地到包内，重启不丢。
 //
 // 不改 dsh 源码：只用 settings 命名空间 + webServer 路由 + 标准 slot。
@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url'
 import z from '@deepseek-ai/schemastery'
 import { LOCKED_DEFAULT_IMAGE, LOCKED_DEFAULT_VIDEO } from './lib/themes.js'
 
-export const name = 'deep-theme'
+export const name = 'dsh-theme'
 export const inject = ['settings']
 
 export const Config = z.object({
@@ -57,20 +57,20 @@ const MIME = {
 
 export function apply(ctx, config) {
   // 设置命名空间（base 传 composition 配置，层序 = schema 默认 → base → 用户覆盖）。
-  const settings = ctx.settings.register('deep-theme', Config, { base: config ?? {} })
+  const settings = ctx.settings.register('dsh-theme', Config, { base: config ?? {} })
 
   // 确保导入目录存在（首次激活）：图片在 import-images/，视频在 import-videos/。
   ctx.effect(() => {
-    fs.mkdir(IMAGE_IMPORTS_DIR, { recursive: true }).catch((e) => console.error('[deep-theme] mkdir import-images failed:', e))
-    fs.mkdir(VIDEO_IMPORTS_DIR, { recursive: true }).catch((e) => console.error('[deep-theme] mkdir import-videos failed:', e))
-  }, 'deep-theme: ensure import dirs')
+    fs.mkdir(IMAGE_IMPORTS_DIR, { recursive: true }).catch((e) => console.error('[dsh-theme] mkdir import-images failed:', e))
+    fs.mkdir(VIDEO_IMPORTS_DIR, { recursive: true }).catch((e) => console.error('[dsh-theme] mkdir import-videos failed:', e))
+  }, 'dsh-theme: ensure import dirs')
 
-  // -- 静态资源服务：/deep-theme/assets/* ────────────────────────────────
+  // -- 静态资源服务：/dsh-theme/assets/* ────────────────────────────────
   const webServer = ctx.get('webServer')
   if (webServer !== undefined) {
     webServer.register({
       kind: 'prefix',
-      path: '/deep-theme/assets',
+      path: '/dsh-theme/assets',
       handler: async (req, res) => {
         try {
           await serveAsset(req, res)
@@ -81,10 +81,10 @@ export function apply(ctx, config) {
       },
     })
 
-    // -- 导入持久化：POST /deep-theme/api/import ────────────────────────
+    // -- 导入持久化：POST /dsh-theme/api/import ────────────────────────
     webServer.register({
       kind: 'prefix',
-      path: '/deep-theme/api',
+      path: '/dsh-theme/api',
       handler: async (req, res) => {
         try {
           await handleApi(req, res, settings)
@@ -106,7 +106,7 @@ function safeJoin(root, rel) {
 
 async function serveAsset(req, res) {
   const url = new URL(req.url, 'http://localhost')
-  const rel = decodeURIComponent(url.pathname.replace(/^\/deep-theme\/assets/, '').replace(/^\/+/, ''))
+  const rel = decodeURIComponent(url.pathname.replace(/^\/dsh-theme\/assets/, '').replace(/^\/+/, ''))
   // 省略 path 时兜底到默认视频皮肤（import-videos/default.mp4）。
   const safeRel = rel || 'import-videos/default.mp4'
   const file = safeJoin(ASSETS_DIR, safeRel)
@@ -124,9 +124,9 @@ async function serveAsset(req, res) {
 
 async function handleApi(req, res, settings) {
   const url = new URL(req.url, 'http://localhost')
-  const route = url.pathname.replace(/^\/deep-theme\/api/, '').replace(/\/+$/, '') || '/import'
+  const route = url.pathname.replace(/^\/dsh-theme\/api/, '').replace(/\/+$/, '') || '/import'
 
-  // 删除导入的皮肤文件：DELETE /deep-theme/api/import  body|query { path: <url or filename> }
+  // 删除导入的皮肤文件：DELETE /dsh-theme/api/import  body|query { path: <url or filename> }
   if (req.method === 'DELETE') {
     let body = ''
     for await (const chunk of req) body += chunk
@@ -169,7 +169,7 @@ async function handleApi(req, res, settings) {
   await fs.mkdir(dir, { recursive: true })
   await fs.writeFile(path.join(dir, safeName), buf)
   const sub = kind === 'video' ? 'import-videos' : 'import-images'
-  const urlOut = `/deep-theme/assets/${sub}/${encodeURIComponent(safeName)}`
+  const urlOut = `/dsh-theme/assets/${sub}/${encodeURIComponent(safeName)}`
   json(res, 200, { ok: true, url: urlOut, kind })
 }
 

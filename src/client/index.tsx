@@ -3,7 +3,7 @@
 // - `shell.overlay`：背景层（position: fixed; inset: 0; z-index: -1; pointer-events: none），
 //   渲染在页面最底层，不拦截任何交互；通过 theme.overrideTokens 让 DSH 主表面
 //   随「内置主题/图片/视频」三态切换明暗或半透明，背景透出。
-// - `settings.section`：设置面板顶层「主题」分区（id: deep-theme, order: 25）。
+// - `settings.section`：设置面板顶层「主题」分区（id: dsh-theme, order: 25）。
 // - `sidebar.footer.action`：侧边栏底部「🎨 主题」按钮（rail 态仅图标）。
 //
 // 视频皮肤两种：跟随鼠标（环绕跟随帧）/ 循环播放（autoplay loop）。
@@ -14,8 +14,8 @@ import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore }
 import { createPortal } from 'react-dom'
 import { ASSET_BASE, BUILTIN_THEMES, BUILTIN_VIDEOS, DEFAULT_VIDEO_SRC, LOCKED_SKINS, themeById, themeImageUrl, translucentTokens } from '../../lib/themes.js'
 
-const NS = 'deep-theme'
-const SOURCE = 'deep-theme'
+const NS = 'dsh-theme'
+const SOURCE = 'dsh-theme'
 
 export const inject = ['settingsScope', 'slots', 'locale', 'theme']
 
@@ -386,7 +386,7 @@ function ThemeManager({ scope, themeService, t }) {
     const reader = new FileReader()
     reader.onload = () => {
       const dataUrl = String(reader.result || '')
-      fetch('/deep-theme/api/import', {
+      fetch('/dsh-theme/api/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ kind, name: file.name, data: dataUrl }),
@@ -421,7 +421,7 @@ function ThemeManager({ scope, themeService, t }) {
     setConfirmDel(null)
     scope.set(libKey(kind), (value[libKey(kind)] || []).filter((u) => u !== target))
     if (value[activeKey(kind)] === target) scope.set(activeKey(kind), lockedDefault(kind))
-    fetch('/deep-theme/api/import', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: target }) }).catch(() => {})
+    fetch('/dsh-theme/api/import', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: target }) }).catch(() => {})
     flash(kind === 'video' ? '已删除导入视频，回到默认' : '已删除导入图片，回到默认壁纸')
   }
 
@@ -624,7 +624,7 @@ function ThemeSettings({ scope, themeService, t }) {
 
 // ── apply ─────────────────────────────────────────────────────────────────
 export function apply(ctx) {
-  ctx.effect(() => ctx.locale.register(NS, { zh: ZH, en: EN }), 'deep-theme: locale dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh: ZH, en: EN }), 'dsh-theme: locale dictionaries')
   const t = ctx.locale.bind(NS)
 
   const scope = ctx.settingsScope.bind({ namespace: NS })
@@ -639,7 +639,7 @@ export function apply(ctx) {
         BackgroundLayer,
       )
     }),
-    'deep-theme: background layer',
+    'dsh-theme: background layer',
   )
 
   // 设置面板顶层「主题」分区（与「插件」同层）。
@@ -648,7 +648,7 @@ export function apply(ctx) {
       { name: 'settings.section', id: NS, order: 25, label: () => t('nav'), locale: NS, inject: () => common },
       ThemeSettings,
     )),
-    'deep-theme: settings section',
+    'dsh-theme: settings section',
   )
 
   // 侧边栏底部「🎨 主题」按钮 → 主题面板弹窗。
@@ -657,6 +657,6 @@ export function apply(ctx) {
       { name: 'sidebar.footer.action', id: `${NS}:footer`, order: 100, label: () => t('nav'), locale: NS, inject: () => common },
       (props) => React.createElement(ThemeFooterButton, { ...common, wide: !(props && props.wide === false) }),
     )),
-    'deep-theme: sidebar footer action',
+    'dsh-theme: sidebar footer action',
   )
 }

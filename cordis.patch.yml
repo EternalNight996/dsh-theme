@@ -1,4 +1,4 @@
-# 主题皮肤（dsh-ui-deep-theme）bundle 补丁层。
+# 主题皮肤（dsh-theme）bundle 补丁层。
 # 安装后由 package.json 的 dsh.bundle.patch 自动生效；后层
 # （profile 自己的 cordis.patch.yml / --patch）可按 id 覆盖或禁用本行。
 #
@@ -6,16 +6,16 @@
 # dsh.client 元数据自动挂载，无需在此声明任何 client 行。
 
 - insert:
-    - id: deep-theme
-      name: dsh-ui-deep-theme
+    - id: dsh-theme
+      name: dsh-theme
       config:
         enabled: true
         mode: image
         builtinId: deep-space
-        imageSrc: '/deep-theme/assets/imports/jimeng-2026-08-22-9787-_.png.png'
+        imageSrc: '/dsh-theme/assets/import-images/default.png'
         imageFit: cover
         videoMode: follow
-        videoSrc: '/deep-theme/assets/imports/main.mp4.mp4'
+        videoSrc: '/dsh-theme/assets/import-videos/default.mp4'
         importedImages: []
         importedVideos: []
         dim: 0

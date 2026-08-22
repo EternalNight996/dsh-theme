@@ -1,4 +1,4 @@
-# dsh-ui-deep-theme · DeepSeek Harness 主题皮肤
+# dsh-theme · DeepSeek Harness 主题皮肤
 
 > 🎨 **给 DeepSeek Harness 的 Web GUI 换背景**：内置主题 / 静态图片 / 动态视频（鼠标环绕跟随帧）三种皮肤形态，侧边栏底部一键切换，设置页完整管理。**一条命令安装，不改 dsh 源码。**
 >
@@ -30,10 +30,10 @@
 
 ```bash
 # 已发布后（npm）
-dsh plugin --profile web add dsh-ui-deep-theme
+dsh plugin --profile web add dsh-theme
 
 # 从 GitHub
-dsh plugin --profile web add github:EternalNight996/dsh-ui-deep-theme
+dsh plugin --profile web add github:EternalNight996/dsh-theme
 
 # 本地联调（link 本地目录）
 dsh plugin --profile web add F:/MyApp/eternal/dsh-theme
