@@ -333,9 +333,11 @@ function ThemeManager({ scope, themeService, t }) {
   const imageFit = value.imageFit || 'cover'
   const videoMode = value.videoMode || 'follow'
   const videoSrc = value.videoSrc || ''
+  const importedImages = value.importedImages && Array.isArray(value.importedImages) ? value.importedImages : []
+  const importedVideos = value.importedVideos && Array.isArray(value.importedVideos) ? value.importedVideos : []
   const dim = typeof value.dim === 'number' ? Math.min(0.7, Math.max(0, value.dim)) : 0
-  const themeAlpha = typeof value.themeAlpha === 'number' ? Math.min(1, Math.max(0, value.themeAlpha)) : 0.75
-  const dialogAlpha = typeof value.dialogAlpha === 'number' ? Math.min(1, Math.max(0, value.dialogAlpha)) : 0.8
+  const themeAlpha = typeof value.themeAlpha === 'number' ? Math.min(1, Math.max(0, value.themeAlpha)) : 1
+  const dialogAlpha = typeof value.dialogAlpha === 'number' ? Math.min(1, Math.max(0, value.dialogAlpha)) : 0
 
   const btheme = themeById(builtinId)
   const backdrop = isBackdropState(mode, btheme)
@@ -351,7 +353,12 @@ function ThemeManager({ scope, themeService, t }) {
     ? ' · ' + btheme.name
     : mode === 'image' ? ' · ' + (imageSrc ? '自定义' : '未导入') : ' · ' + (videoMode === 'loop' ? t('modeLoop') : t('modeFollow'))
 
-  // 导入图片/视频：读为 data URL → 交给 host 写入插件 assets，返回持久化 URL。
+  const libKey = (kind) => kind === 'video' ? 'importedVideos' : 'importedImages'
+  const activeKey = (kind) => kind === 'video' ? 'videoSrc' : 'imageSrc'
+  const lockedDefault = (kind) => (kind === 'video' ? (LOCKED_SKINS.video[0] || DEFAULT_VIDEO_SRC) : (LOCKED_SKINS.image[0] || themeImageUrl(themeById('aurora'))))
+
+  // 导入图片/视频：读为 data URL → host 写入插件 assets 返回持久化 URL；
+  // 加入库（非默认）+ 设为当前激活。
   const onImport = (kind, file) => {
     if (!file) return
     const reader = new FileReader()
@@ -365,7 +372,12 @@ function ThemeManager({ scope, themeService, t }) {
         .then((r) => r.json())
         .then((res) => {
           if (res && res.ok) {
-            scope.set(kind === 'video' ? 'videoSrc' : 'imageSrc', res.url)
+            const url = res.url
+            if (!isLockedSkin(kind, url)) {
+              const cur = value[libKey(kind)] || []
+              if (cur.indexOf(url) < 0) scope.set(libKey(kind), cur.concat(url))
+            }
+            scope.set(activeKey(kind), url)
             flash(kind === 'video' ? '视频已导入并应用' : '图片已导入并应用')
           } else {
             flash('导入失败：' + ((res && res.error) || 'unknown'), false)
@@ -377,19 +389,18 @@ function ThemeManager({ scope, themeService, t }) {
     reader.readAsDataURL(file)
   }
 
-  // 删除导入皮肤（两步确认）：第一次点「删除」→ 变「确认删除？」，再点才真正删除；
-  // 删除后回退到内置默认（极光星云），默认皮肤不可删。
-  const onDeleteImport = (kind) => {
-    const key = kind === 'video' ? 'videoSrc' : 'imageSrc'
-    if (isLockedSkin(kind, value[key])) { flash('这是默认皮肤，不可删除', false); return }
-    if (confirmDel !== kind) { setConfirmDel(kind); flash('再点一次「确认删除」') ; return }
+  // 删除导入皮肤（两步确认）：默认皮肤不可删；删除后回退到受保护的默认。
+  const onDeleteImport = (kind, url) => {
+    const target = url || value[activeKey(kind)]
+    if (!target) return
+    if (isLockedSkin(kind, target)) { flash('这是默认皮肤，不可删除', false); return }
+    const token = kind + '|' + target
+    if (confirmDel !== token) { setConfirmDel(token); flash('再点一次「确认删除」'); return }
     setConfirmDel(null)
-    const url = value[key]
-    scope.set(key, '')
-    if (url) {
-      fetch('/deep-theme/api/import', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: url }) }).catch(() => {})
-    }
-    flash(kind === 'video' ? '已删除导入视频，回到内置' : '已删除导入图片，回到默认极光星云')
+    scope.set(libKey(kind), (value[libKey(kind)] || []).filter((u) => u !== target))
+    if (value[activeKey(kind)] === target) scope.set(activeKey(kind), lockedDefault(kind))
+    fetch('/deep-theme/api/import', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: target }) }).catch(() => {})
+    flash(kind === 'video' ? '已删除导入视频，回到默认' : '已删除导入图片，回到默认壁纸')
   }
 
   const modeOptions = [['builtin', t('modeBuiltin')], ['image', t('modeImage')], ['video', t('modeVideo')]]
@@ -430,7 +441,7 @@ function ThemeManager({ scope, themeService, t }) {
       ),
     ) : null,
 
-    // 图片皮肤（导入图片 + 铺满方式，结构对齐视频皮肤）
+    // 图片皮肤（锁定的默认壁纸 + 导入图片库 + 铺满方式）
     mode === 'image' ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
       React.createElement('div', { className: 'dt-row' },
         React.createElement('span', { className: 'dt-label' }, t('fit')),
@@ -439,20 +450,26 @@ function ThemeManager({ scope, themeService, t }) {
           React.createElement('button', { className: imageFit === 'contain' ? 'active' : '', onClick: () => set('imageFit', 'contain', t('fitContain')) }, t('fitContain')),
         ),
       ),
-      imageSrc ? React.createElement('div', { className: 'dt-themecard active', style: { flexDirection: 'column' } },
-        React.createElement('div', { className: 'swatch', style: { backgroundImage: `url(${imageSrc})`, backgroundSize: imageFit === 'contain' ? 'contain' : 'cover', backgroundPosition: 'center' } }),
-        React.createElement('div', { className: 'name' }, isLockedSkin('image', imageSrc) ? '默认壁纸（不可删除）' : '导入图片'),
-        isLockedSkin('image', imageSrc)
-          ? React.createElement('span', { className: 'dt-hint' }, '受保护，不可删除')
-          : React.createElement('button', { className: 'dt-btn danger', onClick: () => onDeleteImport('image') }, confirmDel === 'image' ? '确认删除？' : t('delete')),
-      ) : React.createElement('span', { className: 'dt-hint' }, t('noImage')),
+      React.createElement('div', { className: 'dt-cardgrid' },
+        React.createElement('button', { className: 'dt-themecard' + (imageSrc === lockedDefault('image') ? ' active' : ''), onClick: () => set('imageSrc', lockedDefault('image'), '已切换到默认壁纸') },
+          React.createElement('div', { className: 'swatch', style: { backgroundImage: `url(${lockedDefault('image')})`, backgroundSize: 'cover', backgroundPosition: 'center' } }),
+          React.createElement('div', { className: 'name' }, '默认壁纸（不可删除）'),
+          React.createElement('div', { className: 'sub' }, '受保护'),
+        ),
+        importedImages.map((url) => React.createElement('div', { key: url, className: 'dt-themecard' + (imageSrc === url ? ' active' : '') },
+          React.createElement('div', { className: 'swatch', style: { backgroundImage: `url(${url})`, backgroundSize: imageFit === 'contain' ? 'contain' : 'cover', backgroundPosition: 'center' } }),
+          React.createElement('div', { className: 'name' }, '导入图片'),
+          React.createElement('button', { className: 'dt-btn danger', onClick: () => onDeleteImport('image', url) }, confirmDel === ('image|' + url) ? '确认删除？' : t('delete')),
+        )),
+      ),
+      importedImages.length === 0 ? React.createElement('span', { className: 'dt-hint' }, t('noImage')) : null,
       React.createElement('div', { className: 'dt-row' },
         React.createElement('span', { className: 'dt-hint' }, t('importHint')),
         React.createElement('button', { className: 'dt-btn primary', onClick: () => { const el = fileRef.current; if (el) el.click() } }, t('importImage')),
       ),
     ) : null,
 
-    // 视频皮肤（跟随/循环 + 内置视频 + 导入 + 蒙层）
+    // 视频皮肤（跟随/循环 + 默认视频 + 内置视频 + 导入库）
     mode === 'video' ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
       React.createElement('div', { className: 'dt-row' },
         React.createElement('span', { className: 'dt-label' }, t('videoMode')),
@@ -463,20 +480,23 @@ function ThemeManager({ scope, themeService, t }) {
       ),
       React.createElement('span', { className: 'dt-hint' }, videoMode === 'loop' ? t('modeLoopHint') : t('modeFollowHint')),
       React.createElement('div', { className: 'dt-cardgrid' },
+        React.createElement('button', { className: 'dt-themecard' + (videoSrc === lockedDefault('video') ? ' active' : ''), onClick: () => set('videoSrc', lockedDefault('video'), '已切换到默认视频') },
+          React.createElement('div', { className: 'swatch', style: { background: 'repeating-linear-gradient(135deg, #1b2230 0 12px, #141b28 12px 24px)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9aa4b2', fontSize: 20 } }, '🎬'),
+          React.createElement('div', { className: 'name' }, '默认视频（不可删除）'),
+          React.createElement('div', { className: 'sub' }, '受保护'),
+        ),
         BUILTIN_VIDEOS.map((v) => React.createElement('button', {
-          key: v.id, className: 'dt-themecard' + (!videoSrc ? ' active' : ''), onClick: () => set('videoSrc', '', '已切换：视频 · ' + v.name),
+          key: v.id, className: 'dt-themecard' + (!videoSrc || videoSrc === DEFAULT_VIDEO_SRC ? ' active' : ''), onClick: () => set('videoSrc', DEFAULT_VIDEO_SRC, '已切换：视频 · ' + v.name),
         },
           React.createElement('div', { className: 'swatch', style: { background: 'repeating-linear-gradient(135deg, #1b2230 0 12px, #141b28 12px 24px)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9aa4b2', fontSize: 20 } }, '🎬'),
           React.createElement('div', { className: 'name' }, v.name),
         )),
+        importedVideos.map((url) => React.createElement('div', { key: url, className: 'dt-themecard' + (videoSrc === url ? ' active' : '') },
+          React.createElement('div', { className: 'swatch', style: { background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9aa4b2', fontSize: 20 } }, '🎬'),
+          React.createElement('div', { className: 'name' }, '导入视频'),
+          React.createElement('button', { className: 'dt-btn danger', onClick: () => onDeleteImport('video', url) }, confirmDel === ('video|' + url) ? '确认删除？' : t('delete')),
+        )),
       ),
-      videoSrc ? React.createElement('div', { className: 'dt-themecard active', style: { flexDirection: 'column' } },
-        React.createElement('div', { className: 'swatch', style: { background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9aa4b2', fontSize: 20 } }, '🎬'),
-        React.createElement('div', { className: 'name' }, isLockedSkin('video', videoSrc) ? '默认视频（不可删除）' : '导入视频'),
-        isLockedSkin('video', videoSrc)
-          ? React.createElement('span', { className: 'dt-hint' }, '受保护，不可删除')
-          : React.createElement('button', { className: 'dt-btn danger', onClick: () => onDeleteImport('video') }, confirmDel === 'video' ? '确认删除？' : t('delete')),
-      ) : null,
       React.createElement('div', { className: 'dt-row' },
         React.createElement('span', { className: 'dt-hint' }, t('importHint')),
         React.createElement('button', { className: 'dt-btn primary', onClick: () => { const el = fileRef.current; if (el) el.click() } }, t('importVideo')),
@@ -516,7 +536,7 @@ function ThemeManager({ scope, themeService, t }) {
     ) : null,
 
     React.createElement('div', { style: { display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'flex-end' } },
-      React.createElement('button', { className: 'dt-btn', onClick: () => { set('mode', 'builtin'); set('builtinId', 'aurora'); set('imageSrc', ''); set('imageFit', 'cover'); set('videoMode', 'follow'); set('videoSrc', ''); set('dim', 0); set('themeAlpha', 0.75); set('dialogAlpha', 0.8); flash('已恢复默认：极光星云') } }, t('reset')),
+      React.createElement('button', { className: 'dt-btn', onClick: () => { const lockImg = lockedDefault('image'); const lockVid = lockedDefault('video'); set('mode', 'image'); set('builtinId', 'deep-space'); set('imageSrc', lockImg); set('imageFit', 'cover'); set('videoMode', 'follow'); set('videoSrc', lockVid); set('importedImages', []); set('importedVideos', []); set('dim', 0); set('themeAlpha', 1); set('dialogAlpha', 0); flash('已恢复默认主题') } }, t('reset')),
       React.createElement('button', { className: 'dt-btn primary', onClick: () => { scope.set('enabled', true); flash('✓ 已应用：' + modeName() + appliedLabel) } }, t('apply')),
     ),
 

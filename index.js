@@ -26,10 +26,12 @@ export const Config = z.object({
   // 三态互斥：builtin（内置主题）/ image（导入图片）/ video（视频：环绕跟随或循环播放）
   mode: z.union(['builtin', 'image', 'video']).default('image'),
   builtinId: z.string().default('deep-space'),
-  imageSrc: z.string().default(LOCKED_DEFAULT_IMAGE), // 默认壁纸（受保护不可删）
+  imageSrc: z.string().default(LOCKED_DEFAULT_IMAGE), // 当前激活图片（受保护默认不可删）
   imageFit: z.union(['cover', 'contain']).default('cover'),
   videoMode: z.union(['follow', 'loop']).default('follow'), // 跟随鼠标 / 循环播放
-  videoSrc: z.string().default(LOCKED_DEFAULT_VIDEO), // 默认视频（受保护不可删）
+  videoSrc: z.string().default(LOCKED_DEFAULT_VIDEO), // 当前激活视频（受保护默认不可删）
+  importedImages: z.array(z.string()).default([]), // 导入的图片库（可删除，不含默认）
+  importedVideos: z.array(z.string()).default([]), // 导入的视频库（可删除，不含默认）
   dim: z.number().min(0).max(0.7).default(0), // 背景压暗（蒙层强度），0 = 完全不压暗
   themeAlpha: z.number().min(0).max(1).default(1), // 主题面板/气泡不透明度（0=全透明背景全透, 1=实底）
   dialogAlpha: z.number().min(0).max(1).default(0), // 对话栏不透明度

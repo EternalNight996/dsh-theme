@@ -16,6 +16,8 @@
         imageFit: cover
         videoMode: follow
         videoSrc: '/deep-theme/assets/imports/main.mp4.mp4'
+        importedImages: []
+        importedVideos: []
         dim: 0
         themeAlpha: 1
         dialogAlpha: 0
