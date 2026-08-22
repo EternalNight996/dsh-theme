@@ -447,11 +447,13 @@ function ThemeManager({ scope, themeService, t }) {
       React.createElement('span', { className: 'dt-hint' }, t('maskHint')),
     ) : null,
 
-    // 预览
+    // 预览（视频用真实视频播放，图片/背景用静态图）
     backdrop ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
       React.createElement('span', { className: 'dt-label' }, t('preview')),
       React.createElement('div', { className: 'dt-preview' },
-        React.createElement('div', { className: 'pbg', style: previewStyle }),
+        mode === 'video'
+          ? React.createElement(VideoLoop, { src: videoSrc || DEFAULT_VIDEO_SRC })
+          : React.createElement('div', { className: 'pbg', style: previewStyle }),
         dim > 0 ? React.createElement('div', { className: 'pmask', style: { background: `rgba(0,0,0,${dim})` } }) : null,
       ),
     ) : null,
