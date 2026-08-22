@@ -11,11 +11,11 @@
       config:
         enabled: true
         mode: image
-        builtinId: aurora
+        builtinId: deep-space
         imageSrc: '/deep-theme/assets/imports/jimeng-2026-08-22-9787-_.png.png'
         imageFit: cover
         videoMode: follow
         videoSrc: '/deep-theme/assets/imports/main.mp4.mp4'
         dim: 0
-        themeAlpha: 0.75
-        dialogAlpha: 0.8
+        themeAlpha: 1
+        dialogAlpha: 0

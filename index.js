@@ -25,14 +25,14 @@ export const Config = z.object({
   enabled: z.boolean().default(true),
   // 三态互斥：builtin（内置主题）/ image（导入图片）/ video（视频：环绕跟随或循环播放）
   mode: z.union(['builtin', 'image', 'video']).default('image'),
-  builtinId: z.string().default('aurora'),
+  builtinId: z.string().default('deep-space'),
   imageSrc: z.string().default(LOCKED_DEFAULT_IMAGE), // 默认壁纸（受保护不可删）
   imageFit: z.union(['cover', 'contain']).default('cover'),
   videoMode: z.union(['follow', 'loop']).default('follow'), // 跟随鼠标 / 循环播放
   videoSrc: z.string().default(LOCKED_DEFAULT_VIDEO), // 默认视频（受保护不可删）
   dim: z.number().min(0).max(0.7).default(0), // 背景压暗（蒙层强度），0 = 完全不压暗
-  themeAlpha: z.number().min(0).max(1).default(0.75), // 主题面板/气泡不透明度（0=全透明背景全透, 1=实底）
-  dialogAlpha: z.number().min(0).max(1).default(0.8), // 对话栏不透明度
+  themeAlpha: z.number().min(0).max(1).default(1), // 主题面板/气泡不透明度（0=全透明背景全透, 1=实底）
+  dialogAlpha: z.number().min(0).max(1).default(0), // 对话栏不透明度
 })
 
 // 插件根目录（ESM：从 import.meta.url 推导）。

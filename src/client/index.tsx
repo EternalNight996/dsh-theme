@@ -38,7 +38,8 @@ const CSS = `
 .dt-seq { display: inline-flex; gap: 4px; padding: 3px; border-radius: 999px; background: var(--dsw-alias-bg-base); }
 .dt-seq button { border: none; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; padding: 6px 14px; border-radius: 999px; cursor: pointer; }
 .dt-seq button.active { background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); font-weight: 600; box-shadow: 0 1px 4px rgba(0,0,0,0.12); }
-.dt-cardgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+.dt-cardgrid { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
+.dt-cardgrid > .dt-themecard { flex: 0 0 auto; min-width: 150px; }
 .dt-themecard { border: 1px solid var(--dsw-alias-border-l1); background: var(--dsw-alias-bg-layer-1); border-radius: 12px; padding: 10px; cursor: pointer; display: flex; flex-direction: column; gap: 8px; text-align: left; color: var(--dsw-alias-label-primary); }
 .dt-themecard.active { border-color: var(--dsw-alias-brand-primary); box-shadow: 0 0 0 1px var(--dsw-alias-brand-primary); }
 .dt-themecard .swatch { height: 60px; border-radius: 8px; }
@@ -447,7 +448,7 @@ function ThemeManager({ scope, themeService, t }) {
       ) : React.createElement('span', { className: 'dt-hint' }, t('noImage')),
       React.createElement('div', { className: 'dt-row' },
         React.createElement('span', { className: 'dt-hint' }, t('importHint')),
-        React.createElement('button', { className: 'dt-btn primary', onClick: () => { const el = fileRef.current; if (el) { el.accept = 'image/png,image/jpeg,image/webp'; el.onchange = (e) => { onImport('image', e.target.files && e.target.files[0]); e.target.value = '' }; el.click() } } }, t('importImage')),
+        React.createElement('button', { className: 'dt-btn primary', onClick: () => { const el = fileRef.current; if (el) el.click() } }, t('importImage')),
       ),
     ) : null,
 
@@ -478,7 +479,7 @@ function ThemeManager({ scope, themeService, t }) {
       ) : null,
       React.createElement('div', { className: 'dt-row' },
         React.createElement('span', { className: 'dt-hint' }, t('importHint')),
-        React.createElement('button', { className: 'dt-btn primary', onClick: () => { const el = fileRef.current; if (el) { el.accept = 'video/mp4,video/webm'; el.onchange = (e) => { onImport('video', e.target.files && e.target.files[0]); e.target.value = '' }; el.click() } } }, t('importVideo')),
+        React.createElement('button', { className: 'dt-btn primary', onClick: () => { const el = fileRef.current; if (el) el.click() } }, t('importVideo')),
       ),
     ) : null,
 
@@ -519,7 +520,19 @@ function ThemeManager({ scope, themeService, t }) {
       React.createElement('button', { className: 'dt-btn primary', onClick: () => { scope.set('enabled', true); flash('✓ 已应用：' + modeName() + appliedLabel) } }, t('apply')),
     ),
 
-    React.createElement('input', { ref: fileRef, type: 'file', style: { display: 'none' } }),
+    React.createElement('input', {
+      ref: fileRef, type: 'file',
+      accept: 'image/png,image/jpeg,image/webp,video/mp4,video/webm',
+      style: { display: 'none' },
+      onChange: (e) => {
+        const f = e.target.files && e.target.files[0]
+        if (f) {
+          const kind = (f.type && f.type.indexOf('video') === 0) ? 'video' : 'image'
+          onImport(kind, f)
+        }
+        e.target.value = '' // 允许再次选择同一文件
+      },
+    }),
 
     toast ? React.createElement('div', { className: 'dt-toast' },
       React.createElement('span', { className: toast.ok ? 'ok' : 'err' }, toast.ok ? '✓' : '✕'),
