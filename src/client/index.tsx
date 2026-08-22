@@ -47,9 +47,10 @@ const CSS = `
 .dt-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .dt-btn { border: 1px solid var(--dsw-alias-border-l2); background: transparent; color: var(--dsw-alias-label-primary); border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
 .dt-btn:hover { background: var(--dsw-alias-bg-layer-1); }
-.dt-btn.primary { background: var(--dsw-alias-brand-primary); color: #fff; border-color: transparent; font-weight: 600; }
+.dt-btn.primary { background: var(--dsw-alias-button-info-fill, var(--dsw-alias-brand-primary)); color: #fff; border-color: transparent; font-weight: 600; }
+.dt-btn.primary:hover { background: var(--dsw-alias-button-info-hover, var(--dsw-alias-brand-primary)); }
 .dt-btn.danger { border-color: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-state-error-primary); }
-.dt-slider { width: 100%; accent-color: var(--dsw-alias-brand-primary); }
+.dt-slider { width: 100%; accent-color: var(--dsw-alias-button-info-fill, var(--dsw-alias-brand-primary)); }
 .dt-overlay { position: fixed; inset: 0; z-index: 200050; background: rgba(0,0,0,0.42); display: flex; align-items: center; justify-content: center; padding: 16px; }
 .dt-modal { background: var(--dsw-alias-bg-overlay); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l1); border-radius: 18px; box-shadow: 0 34px 90px rgba(0,0,0,0.5); overflow: hidden; animation: dt-fade-in 0.22s cubic-bezier(0.2,0.8,0.2,1); max-width: 760px; width: 100%; max-height: 88vh; display: flex; flex-direction: column; }
 .dt-modal-head { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--dsw-alias-border-l1); }
