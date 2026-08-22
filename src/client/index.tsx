@@ -100,6 +100,10 @@ const ZH = {
   fitCover: '铺满 cover',
   fitContain: '完整 contain',
   dimLabel: '背景压暗',
+  themeAlphaLabel: '主题面板透明',
+  themeAlphaHint: '0 = 面板全透（背景全透），1 = 面板实底；气泡/卡片随之调节。',
+  dialogAlphaLabel: '对话栏透明',
+  dialogAlphaHint: '0 = 对话栏全透（背景透出），1 = 对话栏实底；设置/侧栏不受影响（独立实底）。',
   preview: '预览',
   reset: '恢复默认',
   apply: '启用',
@@ -131,6 +135,10 @@ const EN = {
   fitCover: 'Cover',
   fitContain: 'Contain',
   dimLabel: 'Dim',
+  themeAlphaLabel: 'Theme panels opacity',
+  themeAlphaHint: '0 = panels fully transparent (background shows), 1 = solid; bubbles/cards follow.',
+  dialogAlphaLabel: 'Dialog opacity',
+  dialogAlphaHint: '0 = conversation fully transparent, 1 = solid; settings/sidebar stay solid (independent).',
   preview: 'Preview',
   reset: 'Reset defaults',
   apply: 'Apply',
@@ -237,17 +245,19 @@ function BackgroundLayer({ scope, themeService, t }) {
   const videoMode = value && value.videoMode ? value.videoMode : 'follow'
   const videoSrc = (value && value.videoSrc) || DEFAULT_VIDEO_SRC
   const dim = value && typeof value.dim === 'number' ? Math.min(0.7, Math.max(0, value.dim)) : 0
+  const themeAlpha = value && typeof value.themeAlpha === 'number' ? Math.min(1, Math.max(0, value.themeAlpha)) : 0.6
+  const dialogAlpha = value && typeof value.dialogAlpha === 'number' ? Math.min(1, Math.max(0, value.dialogAlpha)) : 0.56
 
   const btheme = themeById(builtinId)
   const backdrop = isBackdropState(mode, btheme)
 
   useEffect(() => {
     if (!themeService || typeof themeService.overrideTokens !== 'function') return
-    const tokens = !enabled ? null : (backdrop ? translucentTokens() : (mode === 'builtin' ? (btheme.tokens || {}) : translucentTokens()))
+    const tokens = !enabled ? null : (backdrop ? translucentTokens(themeAlpha, dialogAlpha) : (mode === 'builtin' ? (btheme.tokens || {}) : translucentTokens(themeAlpha, dialogAlpha)))
     if (!tokens) return
     const dispose = themeService.overrideTokens(SOURCE, tokens)
     return dispose
-  }, [themeService, enabled, mode, builtinId, backdrop])
+  }, [themeService, enabled, mode, builtinId, backdrop, themeAlpha, dialogAlpha])
 
   if (!enabled) return null
 
@@ -301,6 +311,8 @@ function ThemeManager({ scope, themeService, t }) {
   const videoMode = value.videoMode || 'follow'
   const videoSrc = value.videoSrc || ''
   const dim = typeof value.dim === 'number' ? Math.min(0.7, Math.max(0, value.dim)) : 0
+  const themeAlpha = typeof value.themeAlpha === 'number' ? Math.min(1, Math.max(0, value.themeAlpha)) : 0.6
+  const dialogAlpha = typeof value.dialogAlpha === 'number' ? Math.min(1, Math.max(0, value.dialogAlpha)) : 0.56
 
   const btheme = themeById(builtinId)
   const backdrop = isBackdropState(mode, btheme)
@@ -447,6 +459,20 @@ function ThemeManager({ scope, themeService, t }) {
       React.createElement('span', { className: 'dt-hint' }, t('maskHint')),
     ) : null,
 
+    // 主题面板透明可调
+    backdrop ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
+      React.createElement('span', { className: 'dt-label' }, t('themeAlphaLabel')),
+      React.createElement('input', { className: 'dt-slider', type: 'range', min: 0, max: 1, step: 0.05, value: themeAlpha, onChange: (e) => set('themeAlpha', parseFloat(e.target.value), t('themeAlphaLabel') + '：' + Math.round(e.target.value * 100) + '%') }),
+      React.createElement('span', { className: 'dt-hint' }, t('themeAlphaHint')),
+    ) : null,
+
+    // 对话栏透明可调
+    backdrop ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
+      React.createElement('span', { className: 'dt-label' }, t('dialogAlphaLabel')),
+      React.createElement('input', { className: 'dt-slider', type: 'range', min: 0, max: 1, step: 0.05, value: dialogAlpha, onChange: (e) => set('dialogAlpha', parseFloat(e.target.value), t('dialogAlphaLabel') + '：' + Math.round(e.target.value * 100) + '%') }),
+      React.createElement('span', { className: 'dt-hint' }, t('dialogAlphaHint')),
+    ) : null,
+
     // 预览（视频用真实视频播放，图片/背景用静态图）
     backdrop ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
       React.createElement('span', { className: 'dt-label' }, t('preview')),
@@ -459,7 +485,7 @@ function ThemeManager({ scope, themeService, t }) {
     ) : null,
 
     React.createElement('div', { style: { display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'flex-end' } },
-      React.createElement('button', { className: 'dt-btn', onClick: () => { set('mode', 'builtin'); set('builtinId', 'aurora'); set('imageSrc', ''); set('imageFit', 'cover'); set('videoMode', 'follow'); set('videoSrc', ''); set('dim', 0); flash('已恢复默认：极光星云') } }, t('reset')),
+      React.createElement('button', { className: 'dt-btn', onClick: () => { set('mode', 'builtin'); set('builtinId', 'aurora'); set('imageSrc', ''); set('imageFit', 'cover'); set('videoMode', 'follow'); set('videoSrc', ''); set('dim', 0); set('themeAlpha', 0.6); set('dialogAlpha', 0.56); flash('已恢复默认：极光星云') } }, t('reset')),
       React.createElement('button', { className: 'dt-btn primary', onClick: () => { scope.set('enabled', true); flash('✓ 已应用：' + modeName() + appliedLabel) } }, t('apply')),
     ),
 
