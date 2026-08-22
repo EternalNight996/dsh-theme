@@ -8,7 +8,7 @@
 
 `package.json` 已具备市场收录所需关键字段：
 
-- `name`: `dsh-theme`，version `0.1.0`
+- `name`: `@eternalnight/dsh-theme`，version `0.1.0`（`dsh-theme` 已被他人占用）
 - `files` 白名单：`index.js`、`lib`、`assets`、`docs`、`cordis.patch.yml`、`README.md`、`PUBLISH.md`、`LICENSE`
 - `keywords`: 含 `dsh-plugin`（+ `deepseek-harness`、`dsh`、`theme`、`skin`、`background`、`wallpaper`）
 - `repository` / `homepage` / `author` / `license`(MIT) / `publishConfig.registry`
