@@ -107,8 +107,8 @@ function safeJoin(root, rel) {
 async function serveAsset(req, res) {
   const url = new URL(req.url, 'http://localhost')
   const rel = decodeURIComponent(url.pathname.replace(/^\/deep-theme\/assets/, '').replace(/^\/+/, ''))
-  // 默认视频省略 path 时兜底到主视频（便于客户端 src="" 用内置默认）。
-  const safeRel = rel || 'videos/main-compressed.mp4'
+  // 省略 path 时兜底到默认视频皮肤（import-videos/default.mp4）。
+  const safeRel = rel || 'import-videos/default.mp4'
   const file = safeJoin(ASSETS_DIR, safeRel)
   if (!file) return sendText(res, 404, 'not found')
   const buf = await fs.readFile(file).catch(() => null)
