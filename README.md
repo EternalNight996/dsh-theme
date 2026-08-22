@@ -30,7 +30,7 @@
 
 ```bash
 # 已发布后（npm）
-dsh plugin --profile web add dsh-theme
+dsh plugin --profile web add @eternalnight/dsh-theme
 
 # 从 GitHub
 dsh plugin --profile web add github:EternalNight996/dsh-theme

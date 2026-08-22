@@ -48,7 +48,7 @@ npm login
 npm publish --registry=https://registry.npmjs.org/
 ```
 
-发布成功后：`dsh plugin --profile web add dsh-theme`
+发布成功后：`dsh plugin --profile web add @eternalnight/dsh-theme`
 
 > 注意：本机 `npm config get registry` 可能是镜像（如 npmmirror），发布务必用
 > `--registry=https://registry.npmjs.org/` 或改回官方源，避免误发镜像。

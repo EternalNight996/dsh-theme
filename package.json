@@ -1,5 +1,5 @@
 {
-  "name": "dsh-theme",
+  "name": "@eternalnight/dsh-theme",
   "version": "0.1.0",
   "description": "DeepSeek Harness 主题皮肤插件：给 DSH Web GUI 换背景（内置主题 / 静态图片 / 动态视频环绕跟随帧），设置页与侧边栏底部一键切换。",
   "license": "MIT",
