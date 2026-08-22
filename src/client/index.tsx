@@ -281,9 +281,10 @@ function BackgroundLayer({ scope, themeService, t }) {
   } else if (mode === 'builtin' && btheme.kind === 'backdrop') {
     media = React.createElement('img', { src: themeImageUrl(btheme), alt: '', 'aria-hidden': true })
   } else if (mode === 'image') {
+    // 未导入 → 回退到内置默认壁纸（极光星云，受保护不可删），保证默认图片主题始终存在。
     media = imageSrc
       ? React.createElement('img', { src: imageSrc, alt: '', 'aria-hidden': true, style: { objectFit: imageFit } })
-      : React.createElement('div', { className: 'dt-bg-gradient', style: { background: 'radial-gradient(120% 120% at 50% 0%, #1c2333 0%, #0d1117 55%, #070a10 100%)' } })
+      : React.createElement('img', { src: themeImageUrl(themeById('aurora')), alt: '', 'aria-hidden': true, style: { objectFit: imageFit } })
   } else if (mode === 'video') {
     media = React.createElement(VideoSkin, { src: videoSrc, mode: videoMode, active: videoMode !== 'loop' })
   }
@@ -312,6 +313,7 @@ function ThemeManager({ scope, themeService, t }) {
   const toastTimer = useRef(null)
   const [ready, setReady] = useState(false)
   const fileRef = useRef(null)
+  const [confirmDel, setConfirmDel] = useState(null) // 'image' | 'video' | null：待确认删除
 
   useEffect(() => { if (value && !ready) setReady(true) }, [value, ready])
   useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current) }, [])
@@ -368,15 +370,18 @@ function ThemeManager({ scope, themeService, t }) {
     reader.readAsDataURL(file)
   }
 
-  // 删除导入皮肤：清引用 + 通知 host 删除 assets/imports 下的文件。
+  // 删除导入皮肤（两步确认）：第一次点「删除」→ 变「确认删除？」，再点才真正删除；
+  // 删除后回退到内置默认（极光星云），默认皮肤不可删。
   const onDeleteImport = (kind) => {
+    if (confirmDel !== kind) { setConfirmDel(kind); flash('再点一次「确认删除」') ; return }
+    setConfirmDel(null)
     const key = kind === 'video' ? 'videoSrc' : 'imageSrc'
     const url = value[key]
     scope.set(key, '')
     if (url) {
       fetch('/deep-theme/api/import', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: url }) }).catch(() => {})
     }
-    flash(kind === 'video' ? '已删除导入视频' : '已删除导入图片')
+    flash(kind === 'video' ? '已删除导入视频，回到内置' : '已删除导入图片，回到默认极光星云')
   }
 
   const modeOptions = [['builtin', t('modeBuiltin')], ['image', t('modeImage')], ['video', t('modeVideo')]]
@@ -429,7 +434,7 @@ function ThemeManager({ scope, themeService, t }) {
       imageSrc ? React.createElement('div', { className: 'dt-themecard active', style: { flexDirection: 'column' } },
         React.createElement('div', { className: 'swatch', style: { backgroundImage: `url(${imageSrc})`, backgroundSize: imageFit === 'contain' ? 'contain' : 'cover', backgroundPosition: 'center' } }),
         React.createElement('div', { className: 'name' }, '导入图片'),
-        React.createElement('button', { className: 'dt-btn danger', onClick: () => onDeleteImport('image') }, t('delete')),
+        React.createElement('button', { className: 'dt-btn danger', onClick: () => onDeleteImport('image') }, confirmDel === 'image' ? '确认删除？' : t('delete')),
       ) : React.createElement('span', { className: 'dt-hint' }, t('noImage')),
       React.createElement('div', { className: 'dt-row' },
         React.createElement('span', { className: 'dt-hint' }, t('importHint')),
@@ -458,7 +463,7 @@ function ThemeManager({ scope, themeService, t }) {
       videoSrc ? React.createElement('div', { className: 'dt-themecard active', style: { flexDirection: 'column' } },
         React.createElement('div', { className: 'swatch', style: { background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9aa4b2', fontSize: 20 } }, '🎬'),
         React.createElement('div', { className: 'name' }, '导入视频'),
-        React.createElement('button', { className: 'dt-btn danger', onClick: () => onDeleteImport('video') }, t('delete')),
+        React.createElement('button', { className: 'dt-btn danger', onClick: () => onDeleteImport('video') }, confirmDel === 'video' ? '确认删除？' : t('delete')),
       ) : null,
       React.createElement('div', { className: 'dt-row' },
         React.createElement('span', { className: 'dt-hint' }, t('importHint')),
