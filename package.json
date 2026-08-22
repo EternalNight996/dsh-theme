@@ -24,6 +24,7 @@
     "index.js",
     "lib",
     "assets",
+    "docs",
     "cordis.patch.yml",
     "README.md",
     "PUBLISH.md",

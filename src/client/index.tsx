@@ -299,19 +299,24 @@ function BackgroundLayer({ scope, themeService, t }) {
 
   if (!enabled) return null
 
-  let media
-  if (mode === 'builtin' && btheme.kind === 'color') {
-    media = React.createElement('div', { className: 'dt-bg-gradient', style: { background: btheme.bg } })
-  } else if (mode === 'builtin' && btheme.kind === 'backdrop') {
-    media = React.createElement('img', { src: themeImageUrl(btheme), alt: '', 'aria-hidden': true })
-  } else if (mode === 'image') {
-    // 未导入 → 回退到内置默认壁纸（极光星云，受保护不可删），保证默认图片主题始终存在。
-    media = imageSrc
-      ? React.createElement('img', { src: imageSrc, alt: '', 'aria-hidden': true, style: { objectFit: imageFit } })
-      : React.createElement('img', { src: themeImageUrl(themeById('aurora')), alt: '', 'aria-hidden': true, style: { objectFit: imageFit } })
-  } else if (mode === 'video') {
-    media = React.createElement(VideoSkin, { src: videoSrc, mode: videoMode, active: videoMode !== 'loop' })
-  }
+  // memo 化背景媒体：只在皮肤相关字段变化时重建，滑块拖动等无关变化不复用重建。
+  const media = React.useMemo(() => {
+    if (mode === 'builtin' && btheme.kind === 'color') {
+      return React.createElement('div', { className: 'dt-bg-gradient', style: { background: btheme.bg } })
+    }
+    if (mode === 'builtin' && btheme.kind === 'backdrop') {
+      return React.createElement('img', { src: themeImageUrl(btheme), alt: '', 'aria-hidden': true })
+    }
+    if (mode === 'image') {
+      return imageSrc
+        ? React.createElement('img', { src: imageSrc, alt: '', 'aria-hidden': true, style: { objectFit: imageFit } })
+        : React.createElement('img', { src: themeImageUrl(themeById('aurora')), alt: '', 'aria-hidden': true, style: { objectFit: imageFit } })
+    }
+    if (mode === 'video') {
+      return React.createElement(VideoSkin, { src: videoSrc, mode: videoMode, active: videoMode !== 'loop' })
+    }
+    return null
+  }, [mode, btheme, imageSrc, imageFit, videoMode, videoSrc])
 
   const maskEl = backdrop && dim > 0
     ? React.createElement('div', { className: 'dt-bg-mask', style: { background: `rgba(0,0,0,${dim})` } })

@@ -1,115 +1,112 @@
-# dsh-ui-deep-theme 主题皮肤
+# dsh-ui-deep-theme · DeepSeek Harness 主题皮肤
 
 > 🎨 **给 DeepSeek Harness 的 Web GUI 换背景**：内置主题 / 静态图片 / 动态视频（鼠标环绕跟随帧）三种皮肤形态，侧边栏底部一键切换，设置页完整管理。**一条命令安装，不改 dsh 源码。**
+>
+> 🎨 **Give the DeepSeek Harness web GUI a new look**: built-in themes / static image / dynamic 360°-follow video, one-click switch from the sidebar, full management in Settings. **One command to install; no dsh source changes.**
 
 ---
 
-## 🖼 效果预览
+## 🖼 效果预览 / Preview
 
 <p align="center">
-  <img src="assets/screen/theme-dark.png" width="720" alt="暗色 + 极光图片皮肤 + 设置 → 主题" />
+  <img src="docs/screen/dsh-theme.gif" width="720" alt="主题皮肤演示 GIF" />
   <br/>
-  <em>暗色模式 + 「极光星云」图片皮肤：背景透出，界面文字/控件自动加遮罩保证可读</em>
+  <em>主题皮肤演示：内置主题 / 图片 / 视频环绕跟随 / 侧边栏「🎨 主题」按钮 / 导入</em>
+  <br/>
+  <em>Demo: built-in themes / image / 360°-follow video / sidebar 🎨 button / import</em>
 </p>
 
 <p align="center">
-  <img src="assets/screen/theme-light.png" width="720" alt="亮色内置主题 + 设置 → 主题" />
+  <img src="docs/screen/dsh-desktop.png" width="720" alt="桌面效果截图" />
   <br/>
-  <em>亮色内置主题（晨光亮） + 设置 → 主题 面板：内置列表 / 导入图片视频 / 预览</em>
+  <em>桌面实拍：背景透出 + 主题面板 + 明暗适配</em>
+  <br/>
+  <em>Desktop screenshot: background showing through + theme panel + light/dark</em>
 </p>
 
 ---
 
-## 🚀 安装
+## 🚀 安装 / Install
 
 ```bash
 # 已发布后（npm）
-npx @deepseek-ai/dsh plugin --profile web add dsh-ui-deep-theme
+dsh plugin --profile web add dsh-ui-deep-theme
 
 # 从 GitHub
-npx @deepseek-ai/dsh plugin --profile web add github:EternalNight996/dsh-ui-deep-theme
+dsh plugin --profile web add github:EternalNight996/dsh-ui-deep-theme
 
-# 本地联调（link 本地目录，改代码即时生效）
-npx @deepseek-ai/dsh plugin --profile web add F:/MyApp/eternal/dsh-theme
+# 本地联调（link 本地目录）
+dsh plugin --profile web add F:/MyApp/eternal/dsh-theme
 ```
 
-装完**重启 dsh web**：侧边栏底部出现「🎨 主题」按钮，设置页出现顶层「主题」分区。**默认已显示「极光星云」壁纸**，可随时切换到视频环绕或内置主题。
+装完**重启 dsh web**：侧边栏底部出现「🎨 主题」按钮，设置页出现顶层「主题」分区，默认已显示默认壁纸。
 
-> 每次点选（模式/主题/壁纸/视频/导入/启用）都会弹出✓回馈提示，不会「点了没反应」。
+After install **restart dsh web**: a 🎨 Theme button appears at the sidebar foot and a top-level "Theme" section appears in Settings (default wallpaper shown by default).
 
 ---
 
-## ✨ 功能
+## ✨ 功能 / Features
 
-### 三种皮肤形态（互斥启用）
+### 三种皮肤形态（互斥）/ Three skin modes (mutually exclusive)
 
-| 形态 | 说明 |
+| 形态 / Mode | 说明 / Description |
 | --- | --- |
-| **内置主题** | **应用配色**4 套（深空暗 / 石墨 / 晨光亮 / 樱粉）+ **内置背景皮肤**3 张（极光星云 / 暮色霞光 / 深空宇宙，**默认即极光星云**），统一在「内置主题」里选 |
-| **图片皮肤** | 导入本地图（png/jpg/webp），持久化到插件 `assets/imports/`，支持删除 |
-| **视频皮肤** | **跟随鼠标**（环绕跟随帧）/ **循环播放**（autoplay loop）两类；内置「环绕少女」+ 导入视频（mp4/webm，持久化 + 可删除） |
+| **内置主题 / Built-in** | **应用配色**4 套（深空暗 / 石墨 / 晨光亮 / 樱粉）+ **背景皮肤**（极光星云等），统一在此选择。4 app color schemes + backdrop skins (aurora etc.) |
+| **图片皮肤 / Image** | 导入本地图片（png/jpg/webp），持久化到 `assets/import-images/`，**以文件名命名（≤15 字）**，支持删除。Import png/jpg/webp, persisted, named by filename (≤15 chars), deletable |
+| **视频皮肤 / Video** | **跟随鼠标**（360° 环绕跟随帧）/ **循环播放**两类；默认 `import-videos/default.mp4`，导入视频持久化 + 可删除。Follow-mouse 360° orbit / loop; default `default.mp4`, import persisted + deletable |
 
-> **蒙层默认不加**：图片/视频/内置背景皮肤都提供「蒙层」开关（默认关），开启后按蒙层强度压暗背景提升文字可读性。
+### 🎥 视频皮肤 · 两种模式 / Video · two modes
 
-### 🎥 视频皮肤 · 两种模式
+- **跟随鼠标**：鼠标横向位置 → 视频 `currentTime`，`rAF` 最短路径 lerp（跨 ±π 不跳变），节流 seek + 阈值，1080p 不卡顿；`prefers-reduced-motion` 下停帧。Mouse-follow: currentTime via shortest-path lerp, throttled seeks, no stutter; stops under reduced-motion.
+- **循环播放**：自动循环纯背景。Autoplay looping background.
+- 背景层 `pointer-events: none`，不拦截交互。Background layer never intercepts interaction.
 
-- **跟随鼠标**：鼠标横向位置 → 视频 `currentTime`，绕屏幕中心转一圈角色随之转向；`rAF` 里对归一化时间做**最短路径 lerp**（wrap 到 `[-0.5, 0.5]`），跨 ±π 边界不跳变；目标时差足够大才真正 seek（~16Hz + 位移阈值），1080p 不卡顿；`prefers-reduced-motion` 下停在初始朝向
-- **循环播放**：自动循环播放的纯背景视频
-- 背景层 `pointer-events: none`，**绝不拦截任何交互**；mousemove 挂在 window
+### 受保护默认皮肤 / Protected default skins
+- `import-images/default.png` 与 `import-videos/default.mp4` 为**默认皮肤，不可删除**。`default.png` / `default.mp4` are non-deletable defaults.
 
-### 导入 · 持久化 · 删除
+### 透明可调 / Adjustable transparency
+- 「主题面板透明」「对话栏透明」「背景压暗」滑杆独立可调；设置/侧栏/顶栏保持独立实底。Sliders for panel/dialog transparency & dim; settings/sidebar/topbar stay solid independently.
 
-- 导入的图片/视频提交给 host → 写入插件 `assets/imports/` 并返回可持久化 URL（存进设置命名空间），**重启不丢**
-- 「图片皮肤」/「视频皮肤」有**删除按钮**：清除引用并删除 `assets/imports/` 下对应文件
-
-### 入口
-
-- **侧边栏底部**「🎨 主题」按钮（rail 窄条态仅图标）→ 主题面板弹窗（快切 / 导入 / 预览）
-- **设置 → 主题** 顶层分区（id: `deep-theme`, order: 25）
-- 当前主题持久化到 `deep-theme` 设置命名空间，**重启保留**
-- 全部自定义 UI 用 `var(--dsw-alias-*)`，明暗原生适配
+### 入口 / Entry points
+- 侧边栏底部「🎨 主题」按钮（rail 窄条态仅图标）→ 主题面板弹窗。Sidebar footer 🎨 button (rail shows icon only) → theme panel.
+- **设置 → 主题** 顶层分区（id `deep-theme`, order 25）。Settings → Theme (top-level).
+- 当前主题持久化到 `deep-theme` 命名空间，重启保留。Persisted in `deep-theme`, survives restart.
+- 全部 UI 用 `var(--dsw-alias-*)`，明暗自适应。All UI uses `var(--dsw-alias-*)`, light/dark native.
 
 ---
 
-## 📁 目录结构
+## 🛠 构建 / Build
 
-```
-dsh-ui-deep-theme/
-├── index.js              # host 插件：settings 命名空间 + 静态资源 + 导入持久化
-├── lib/
-│   ├── client.js         # client bundle（构建产物，__ModuleLoader__ 格式）
-│   └── themes.js         # 内置主题定义（token / 背景色 / 预设图）
-├── src/
-│   └── client/index.tsx  # client 源码：背景层 + 设置分区 + footer 按钮 + 360 跟随
-├── assets/
-│   ├── backgrounds/      # 内置默认图片（aurora / sunset / deep-space）
-│   ├── videos/
-│   │   └── main-compressed.mp4  # 默认视频（拷贝自 meng-you，1080p 压缩版）
-│   └── imports/          # 用户导入的图片/视频（运行时写入）
-├── cordis.patch.yml      # bundle 补丁层（host 行，安装自动挂载）
-├── build.mjs             # esbuild 构建脚本（TSX → lib/client.js）
-├── scripts/gen-bgs.ps1   # 内置背景图生成脚本
-├── package.json          # dsh.client + dsh.bundle.patch 清单
-└── README.md
-```
-
----
-
-## 🛠 开发 / 构建
+> 安装后可改前端源码并重新构建。
 
 ```bash
 npm install
 npm run build        # 只改 client（src/client）时需要
-npm run gen:bg       # 重新生成内置背景图
+npm run gen:bg       # 重新生成内置背景图（可选）
 # 改 index.js / lib/themes.js 无需构建，重启即生效
 ```
 
-## 🗺 待办 / 路线图
+---
 
-- [ ] **更多内置视频/图片素材**：提供多套环绕素材与抽象背景
-- [ ] **按会话/工作区记忆主题**：不同会话记住各自主题
-- [ ] **自定义 CSS 主题**：导入/导出完整主题 token 方案
-- [ ] **动效强度分级**：除 `prefers-reduced-motion` 外提供手动档位
+## 📜 日志更新 / Changelog
+
+- **v0.1.0** 初始主题皮肤插件：背景层 + 设置 → 主题 + 侧边栏「🎨 主题」按钮；三种皮肤形态（内置主题 / 图片 / 视频环绕跟随）。Initial plugin: background layer, Settings → Theme, sidebar 🎨 button; three skin modes.
+- **v0.1.1+** 视频**两种模式**（跟随鼠标 / 循环播放）；**蒙层/透明可调**（主题面板、对话栏、背景压暗）；导入图片/视频**持久化** + 两步删除；字体/按钮颜色**随 DSH 通用外观适配**；跟随鼠标**性能优化**（seek 节流 / 后台暂停 / 空闲停帧）。Video two modes; adjustable mask/transparency; import persistence + two-step delete; font/buttons adapt to DSH appearance; follow-mouse perf.
+- **v0.1.2+** 导入**库**（多张新增/删除）、**default.png/default.mp4 默认皮肤不可删**、导入图片/视频按类型存入 `import-images` / `import-videos`、导入皮肤以**文件名命名（≤15 字）**、移除内置环绕少女。Import library (multi add/delete), protected default skins, per-type import dirs, filename-named skins, removed built-in orbit video.
+
+---
+
+## 🗺 待办 / Roadmap
+
+- [ ] **导入记录/最近使用**：最近导入的皮肤排序与最近使用标签。Recent-imports ordering & "recently used" badge.
+- [ ] **多语言**：界面 i18n（当前中英词条，补充更多语言）。i18n for the panel (en/zh now, more later).
+- [ ] **按会话记忆主题**：不同工作区记住各自主题。Per-workspace theme memory.
+- [ ] **自定义 CSS 主题**：导入/导出完整主题 token 方案。Import/export custom token themes.
+- [ ] **动效强度分级**：除 `prefers-reduced-motion` 外提供手动档位。Manual motion-strength level.
+- [ ] **拖拽上传**：拖拽图片/视频到面板即可导入。Drag-and-drop import.
+- [ ] **视频帧预览**：跟随鼠标模式显示实时帧缩略图。Live frame thumbnail preview in follow mode.
+
+---
 
 ## 📄 License
 
@@ -118,3 +115,4 @@ MIT
 ---
 
 > 换上喜欢的背景，让 DSH 每天都不一样。🎨
+> Give DSH a background you love, so it feels different every day.
