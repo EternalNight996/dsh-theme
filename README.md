@@ -1,20 +1,18 @@
-# dsh-theme · DeepSeek Harness 主题皮肤
-
-> 🎨 **给 DeepSeek Harness 的 Web GUI 换背景**：内置主题 / 静态图片 / 动态视频（鼠标环绕跟随帧）三种皮肤形态，侧边栏底部一键切换，设置页完整管理。**一条命令安装，不改 dsh 源码。**
->
-> 🎨 **Give the DeepSeek Harness web GUI a new look**: built-in themes / static image / dynamic 360°-follow video, one-click switch from the sidebar, full management in Settings. **One command to install; no dsh source changes.**
-
----
-
-## 🖼 效果预览 / Preview
-
 <p align="center">
-  <img src="docs/screen/dsh-theme.gif" width="720" alt="主题皮肤演示 GIF" />
-  <br/>
-  <em>主题皮肤演示：内置主题 / 图片 / 视频环绕跟随 / 侧边栏「🎨 主题」按钮 / 导入</em>
-  <br/>
-  <em>Demo: built-in themes / image / 360°-follow video / sidebar 🎨 button / import</em>
+  <img src="docs/screen/dsh-theme.gif" width="720" alt="dsh-theme 主题皮肤演示" />
 </p>
+
+<div align="center">
+  <h1 align="center">@eternalnight/dsh-theme</h1>
+  <p><strong>DeepSeek Harness 主题皮肤插件 · DSH Theme Skin Plugin</strong></p>
+  <p>
+    <a href="https://www.npmjs.com/package/@eternalnight/dsh-theme"><img src="https://img.shields.io/npm/v/@eternalnight/dsh-theme?style=flat-square" alt="npm version" /></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License" /></a>
+    <a href="https://github.com/EternalNight996/dsh-theme"><img src="https://img.shields.io/badge/GitHub-dsh%20plugin-blue?style=flat-square" alt="GitHub" /></a>
+  </p>
+  <p>🎨 给 DeepSeek Harness 的 Web GUI 换背景：内置主题 / 静态图片 / 动态视频（鼠标环绕跟随帧）三种皮肤形态，侧边栏底部一键切换，设置页完整管理。<strong>一条命令安装，不改 dsh 源码。</strong></p>
+  <p>Give the DeepSeek Harness web GUI a new look: built-in themes / static image / dynamic 360°-follow video, one-click from the sidebar, full management in Settings. <strong>One command to install; no dsh source changes.</strong></p>
+</div>
 
 <p align="center">
   <img src="docs/screen/dsh-desktop.png" width="720" alt="桌面效果截图" />
@@ -90,6 +88,7 @@ npm run gen:bg       # 重新生成内置背景图（可选）
 
 ## 📜 日志更新 / Changelog
 
+- **v0.1.1** README 重构：MVCheck 式居中横幅 + badge 徽章 + 中英双语 + 展示素材前置 + 待办 + 日志；插件市场收录达标（GitHub 打 `dsh-plugin` 等 topics）。README redesign & marketplace-ready.
 - **v0.1.0** 初始发布：背景层 + 设置 → 主题 + 侧边栏「🎨 主题」按钮；三种皮肤形态（内置主题 / 图片 / 视频环绕跟随）；视频**跟随鼠标**（360° 环绕跟随帧）与**循环播放**两类；**透明可调**（主题面板 / 对话栏 / 背景压暗）；导入图片/视频**持久化**到 `import-images` / `import-videos` + 两步删除；**default.png / default.mp4 默认皮肤不可删**；导入皮肤以**文件名命名（≤15 字）**；字体/按钮颜色随 DSH 外观适配；跟随鼠标性能优化（seek 节流 / 后台暂停 / 空闲停帧）。
 
 Initial release: background layer, Settings → Theme, sidebar 🎨 button; three skin modes (built-in / image / 360°-follow video); video follow-mouse & loop; adjustable transparency (panel / dialog / dim); import persistence to `import-images`/`import-videos` + two-step delete; non-deletable `default.png`/`default.mp4`; filename-named skins (≤15 chars); font/buttons adapt to DSH appearance; follow-mouse perf (throttled seeks / background pause / idle stop).
