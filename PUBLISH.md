@@ -9,7 +9,7 @@
 `package.json` 已具备市场收录所需关键字段：
 
 - `name`: `dsh-theme`，version `0.1.0`
-- `files` 白名单：`index.js`、`lib`、`assets`、`cordis.patch.yml`、`README.md`、`PUBLISH.md`、`LICENSE`
+- `files` 白名单：`index.js`、`lib`、`assets`、`docs`、`cordis.patch.yml`、`README.md`、`PUBLISH.md`、`LICENSE`
 - `keywords`: 含 `dsh-plugin`（+ `deepseek-harness`、`dsh`、`theme`、`skin`、`background`、`wallpaper`）
 - `repository` / `homepage` / `author` / `license`(MIT) / `publishConfig.registry`
 - `dsh.client`: `platform: web` + `inject`（运行时自动挂载）
