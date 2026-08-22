@@ -23,9 +23,9 @@ export const inject = ['settings']
 export const Config = z.object({
   enabled: z.boolean().default(true),
   // 三态互斥：builtin（内置主题）/ image（静态图片）/ video（动态视频环绕跟随）
-  mode: z.union(['builtin', 'image', 'video']).default('builtin'),
+  mode: z.union(['builtin', 'image', 'video']).default('image'),
   builtinId: z.string().default('dark'),
-  imageSrc: z.string().default(''), // 内置预设 id 或 /deep-theme/assets/** 或 data URL
+  imageSrc: z.string().default('preset:aurora'), // 内置预设 id 或 /deep-theme/assets/** 或 data URL
   imageFit: z.union(['cover', 'contain']).default('cover'),
   imageMask: z.boolean().default(true), // 全局遮罩保证文字可读
   videoSrc: z.string().default(''), // 空 = 内置默认 /deep-theme/assets/videos/main-compressed.mp4

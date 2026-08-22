@@ -33,7 +33,9 @@ npx @deepseek-ai/dsh plugin --profile web add github:EternalNight996/dsh-ui-deep
 npx @deepseek-ai/dsh plugin --profile web add F:/MyApp/eternal/dsh-theme
 ```
 
-装完**重启 dsh web**：侧边栏底部出现「🎨 主题」按钮，设置页出现顶层「主题」分区。
+装完**重启 dsh web**：侧边栏底部出现「🎨 主题」按钮，设置页出现顶层「主题」分区。**默认已显示「极光星云」壁纸**，可随时切换到视频环绕或内置主题。
+
+> 每次点选（模式/主题/壁纸/视频/导入/启用）都会弹出✓回馈提示，不会「点了没反应」。
 
 ---
 
@@ -44,8 +46,8 @@ npx @deepseek-ai/dsh plugin --profile web add F:/MyApp/eternal/dsh-theme
 | 形态 | 说明 |
 | --- | --- |
 | **内置主题** | 4 套应用配色（深空暗 / 石墨 / 晨光亮 / 樱粉），换色不换布局，明暗原生适配 |
-| **静态图片** | 3 张内置预设（极光星云 / 暮色霞光 / 深空宇宙）+ 导入本地图（png/jpg/webp） |
-| **动态视频** | 默认 `main-compressed.mp4`（1080p 压缩版环绕素材）+ 导入视频（mp4/webm） |
+| **静态图片（壁纸）** | 3 张内置预设（极光星云 / 暮色霞光 / 深空宇宙，**默认即极光星云**）+ 导入本地图（png/jpg/webp） |
+| **动态视频** | 1 套内置视频主题（环绕少女 main-compressed.mp4）+ 导入视频（mp4/webm） |
 
 ### 🎥 动态视频 · 鼠标环绕跟随帧
 

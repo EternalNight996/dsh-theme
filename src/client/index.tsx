@@ -10,7 +10,7 @@
 
 import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
-import { BUILTIN_THEMES, BUILTIN_IMAGES, DEFAULT_VIDEO_SRC, translucentTokens } from '../../lib/themes.js'
+import { BUILTIN_THEMES, BUILTIN_IMAGES, BUILTIN_VIDEOS, DEFAULT_VIDEO_SRC, translucentTokens } from '../../lib/themes.js'
 
 const NS = 'deep-theme'
 const SOURCE = 'deep-theme'
@@ -52,6 +52,9 @@ const CSS = `
 .dt-modal-head .title { font-weight: 700; font-size: 15px; }
 .dt-modal-close { border: 1px solid var(--dsw-alias-border-l2); background: transparent; color: inherit; border-radius: 8px; width: 30px; height: 30px; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .dt-modal-body { padding: 18px 20px; overflow-y: auto; }
+.dt-toast { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); z-index: 300100; background: var(--dsw-alias-bg-overlay); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l1); border-radius: 10px; padding: 9px 16px; font-size: 13px; font-weight: 600; box-shadow: 0 12px 32px rgba(0,0,0,0.35); display: flex; align-items: center; gap: 8px; animation: dt-fade-in 0.2s ease-out; max-width: 82vw; }
+.dt-toast .ok { color: var(--dsw-alias-state-success-primary); }
+.dt-toast .err { color: var(--dsw-alias-state-error-primary); }
 .dt-preview { height: 120px; border-radius: 12px; border: 1px solid var(--dsw-alias-border-l1); overflow: hidden; position: relative; background: var(--dsw-alias-bg-base); }
 .dt-preview .pbg { position: absolute; inset: 0; }
 .dt-preview .pmask { position: absolute; inset: 0; background: rgba(0,0,0,0.35); }
@@ -295,10 +298,12 @@ function BackgroundLayer({ scope, themeService, t }) {
 function ThemeManager({ scope, themeService, t }) {
   const snap = useScope(scope)
   const value = snap && snap.value && typeof snap.value === 'object' ? snap.value : null
-  const [msg, setMsg] = useState('')
+  const [toast, setToast] = useState(null)
+  const toastTimer = useRef(null)
   const [ready, setReady] = useState(false)
 
   useEffect(() => { if (value && !ready) setReady(true) }, [value, ready])
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current) }, [])
 
   if (!value || !ready) return React.createElement('div', { style: { padding: 16, opacity: 0.6 } }, t('loading'))
 
@@ -309,7 +314,20 @@ function ThemeManager({ scope, themeService, t }) {
   const videoFollow = value.videoFollow !== false
   const dim = typeof value.dim === 'number' ? value.dim : 0.35
 
-  const set = (k, v) => { scope.set(k, v); setMsg('') }
+  // 任一动作都给出可见回馈（toast），避免「点了没反应」。
+  const flash = (text, ok = true) => {
+    setToast({ text, ok })
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(null), 2400)
+  }
+  const set = (k, v, fb) => { scope.set(k, v); if (fb) flash(fb) }
+  const modeName = () => mode === 'builtin' ? t('modeBuiltin') : mode === 'image' ? t('modeImage') : t('modeVideo')
+  const currentImageName = value.imageSrc && value.imageSrc.startsWith('preset:')
+    ? ((BUILTIN_IMAGES.find((x) => 'preset:' + x.id === value.imageSrc) || {}).name || '')
+    : ''
+  const appliedLabel = mode === 'builtin'
+    ? ' · ' + ((BUILTIN_THEMES.find((x) => x.id === builtinId) || {}).name || '')
+    : mode === 'image' ? ' · ' + (currentImageName || '自定义') : mode === 'video' ? ' · 环绕跟随' : ''
   const previewSrc = mode === 'image'
     ? resolveImageSrc(value)
     : mode === 'video' ? ((value.videoSrc) || DEFAULT_VIDEO_SRC) : ''
@@ -328,15 +346,15 @@ function ThemeManager({ scope, themeService, t }) {
         .then((r) => r.json())
         .then((res) => {
           if (res && res.ok) {
-            set(kind === 'video' ? 'videoSrc' : 'imageSrc', res.url)
-            setMsg(kind === 'video' ? '视频已导入并应用' : '图片已导入并应用')
+            scope.set(kind === 'video' ? 'videoSrc' : 'imageSrc', res.url)
+            flash(kind === 'video' ? '视频已导入并应用' : '图片已导入并应用')
           } else {
-            setMsg('导入失败：' + ((res && res.error) || 'unknown'))
+            flash('导入失败：' + ((res && res.error) || 'unknown'), false)
           }
         })
-        .catch((e) => setMsg('导入失败：' + String(e && e.message ? e.message : e)))
+        .catch((e) => flash('导入失败：' + String(e && e.message ? e.message : e), false))
     }
-    reader.onerror = () => setMsg('读取文件失败')
+    reader.onerror = () => flash('读取文件失败', false)
     reader.readAsDataURL(file)
   }
 
@@ -355,7 +373,7 @@ function ThemeManager({ scope, themeService, t }) {
     // 三态切换
     React.createElement('div', { className: 'dt-seq' },
       modeOptions.map(([v, label]) => React.createElement('button', {
-        key: v, className: mode === v ? 'active' : '', onClick: () => set('mode', v), 'aria-pressed': mode === v,
+        key: v, className: mode === v ? 'active' : '', onClick: () => set('mode', v, `已切换：${label}`), 'aria-pressed': mode === v,
       }, label)),
     ),
 
@@ -364,7 +382,7 @@ function ThemeManager({ scope, themeService, t }) {
       React.createElement('span', { className: 'dt-hint' }, t('builtinHint')),
       React.createElement('div', { className: 'dt-cardgrid' },
         BUILTIN_THEMES.map((th) => React.createElement('button', {
-          key: th.id, className: 'dt-themecard' + (builtinId === th.id ? ' active' : ''), onClick: () => set('builtinId', th.id),
+          key: th.id, className: 'dt-themecard' + (builtinId === th.id ? ' active' : ''), onClick: () => set('builtinId', th.id, '已切换：内置 · ' + th.name),
         },
           React.createElement('div', { className: 'swatch', style: { background: th.bg, backgroundSize: 'cover', backgroundPosition: 'center' } }),
           React.createElement('div', { className: 'name' }, th.name),
@@ -376,7 +394,7 @@ function ThemeManager({ scope, themeService, t }) {
     mode === 'image' ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
       React.createElement('div', { className: 'dt-cardgrid' },
         BUILTIN_IMAGES.map((img) => React.createElement('button', {
-          key: img.id, className: 'dt-themecard' + (!value.imageSrc || value.imageSrc === 'preset:' + img.id || value.imageSrc === builtinImageSrc(img.id) ? ' active' : ''), onClick: () => set('imageSrc', 'preset:' + img.id),
+          key: img.id, className: 'dt-themecard' + (!value.imageSrc || value.imageSrc === 'preset:' + img.id || value.imageSrc === builtinImageSrc(img.id) ? ' active' : ''), onClick: () => set('imageSrc', 'preset:' + img.id, '已切换：壁纸 · ' + img.name),
         },
           React.createElement('div', { className: 'swatch', style: { backgroundImage: `url(${builtinImageSrc(img.id)})`, backgroundSize: 'cover', backgroundPosition: 'center' } }),
           React.createElement('div', { className: 'name' }, img.name),
@@ -389,27 +407,35 @@ function ThemeManager({ scope, themeService, t }) {
       React.createElement('div', { className: 'dt-row' },
         React.createElement('span', { className: 'dt-hint' }, t('fit')),
         React.createElement('div', { className: 'dt-seq' },
-          React.createElement('button', { className: imageFit === 'cover' ? 'active' : '', onClick: () => set('imageFit', 'cover') }, t('fitCover')),
-          React.createElement('button', { className: imageFit === 'contain' ? 'active' : '', onClick: () => set('imageFit', 'contain') }, t('fitContain')),
+          React.createElement('button', { className: imageFit === 'cover' ? 'active' : '', onClick: () => set('imageFit', 'cover', '铺满方式：cover') }, t('fitCover')),
+          React.createElement('button', { className: imageFit === 'contain' ? 'active' : '', onClick: () => set('imageFit', 'contain', '铺满方式：contain') }, t('fitContain')),
         ),
       ),
       React.createElement('div', { className: 'dt-row' },
         React.createElement('span', { className: 'dt-hint' }, t('mask')),
-        React.createElement('button', { className: 'dt-btn', onClick: () => set('imageMask', !imageMask), 'aria-pressed': imageMask }, imageMask ? '开' : '关'),
+        React.createElement('button', { className: 'dt-btn', onClick: () => set('imageMask', !imageMask, t('mask') + '：' + (!imageMask ? '开' : '关')), 'aria-pressed': imageMask }, imageMask ? '开' : '关'),
       ),
     ) : null,
 
     // 视频皮肤
     mode === 'video' ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
+      React.createElement('div', { className: 'dt-cardgrid' },
+        BUILTIN_VIDEOS.map((v) => React.createElement('button', {
+          key: v.id, className: 'dt-themecard' + (!value.videoSrc ? ' active' : ''), onClick: () => set('videoSrc', '', '已切换：视频 · ' + v.name),
+        },
+          React.createElement('div', { className: 'swatch', style: { background: 'repeating-linear-gradient(135deg, #1b2230 0 10px, #141b28 10px 20px)' } }),
+          React.createElement('div', { className: 'name' }, '🎬 ' + v.name),
+        )),
+      ),
       React.createElement('div', { className: 'dt-row' },
         React.createElement('span', { className: 'dt-hint' }, t('followHint')),
-        React.createElement('button', { className: 'dt-btn', onClick: () => set('videoFollow', !videoFollow), 'aria-pressed': videoFollow }, videoFollow ? '开' : '关'),
+        React.createElement('button', { className: 'dt-btn', onClick: () => set('videoFollow', !videoFollow, t('videoFollow') + '：' + (!videoFollow ? '开' : '关')), 'aria-pressed': videoFollow }, videoFollow ? '开' : '关'),
       ),
       React.createElement('label', { className: 'dt-btn primary', style: { alignSelf: 'flex-start', cursor: 'pointer' } },
         t('importVideo'),
         React.createElement('input', { type: 'file', accept: 'video/mp4,video/webm', style: { display: 'none' }, onChange: (e) => { onImport('video', e.target.files && e.target.files[0]); e.target.value = '' } }),
       ),
-      React.createElement('span', { className: 'dt-hint' }, '默认：main-compressed.mp4（1080p 压缩版环绕素材）'),
+      React.createElement('span', { className: 'dt-hint' }, '默认：main-compressed.mp4（1080p 压缩版环绕素材，鼠标左右滑动环绕跟随）'),
     ) : null,
 
     // 通用：变暗 + 预览
@@ -427,12 +453,15 @@ function ThemeManager({ scope, themeService, t }) {
       ),
     ) : null,
 
-    msg ? React.createElement('div', { className: 'dt-hint' }, msg) : null,
-
     React.createElement('div', { style: { display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'flex-end' } },
-      React.createElement('button', { className: 'dt-btn', onClick: () => { set('mode', 'builtin'); set('builtinId', 'dark'); set('imageSrc', ''); set('imageFit', 'cover'); set('imageMask', true); set('videoSrc', ''); set('videoFollow', true); set('dim', 0.35) } }, t('reset')),
-      React.createElement('button', { className: 'dt-btn primary', onClick: () => set('enabled', true) }, t('apply')),
+      React.createElement('button', { className: 'dt-btn', onClick: () => { set('mode', 'image'); set('builtinId', 'dark'); set('imageSrc', 'preset:aurora'); set('imageFit', 'cover'); set('imageMask', true); set('videoSrc', ''); set('videoFollow', true); set('dim', 0.35); flash('已恢复默认：极光星云壁纸') } }, t('reset')),
+      React.createElement('button', { className: 'dt-btn primary', onClick: () => { scope.set('enabled', true); flash('✓ 已应用：' + modeName() + appliedLabel) } }, t('apply')),
     ),
+
+    toast ? React.createElement('div', { className: 'dt-toast' },
+      React.createElement('span', { className: toast.ok ? 'ok' : 'err' }, toast.ok ? '✓' : '✕'),
+      React.createElement('span', null, toast.text),
+    ) : null,
   )
 }
 

@@ -10,9 +10,9 @@
       name: dsh-ui-deep-theme
       config:
         enabled: true
-        mode: builtin
+        mode: image
         builtinId: dark
-        imageSrc: ''
+        imageSrc: 'preset:aurora'
         imageFit: cover
         imageMask: true
         videoSrc: ''
