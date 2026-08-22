@@ -10,12 +10,12 @@
       name: dsh-ui-deep-theme
       config:
         enabled: true
-        mode: builtin
+        mode: image
         builtinId: aurora
-        imageSrc: ''
+        imageSrc: '/deep-theme/assets/imports/jimeng-2026-08-22-9787-_.png.png'
         imageFit: cover
         videoMode: follow
-        videoSrc: ''
+        videoSrc: '/deep-theme/assets/imports/main.mp4.mp4'
         dim: 0
         themeAlpha: 0.75
         dialogAlpha: 0.8

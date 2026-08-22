@@ -12,7 +12,7 @@
 
 import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
-import { ASSET_BASE, BUILTIN_THEMES, BUILTIN_VIDEOS, DEFAULT_VIDEO_SRC, themeById, themeImageUrl, translucentTokens } from '../../lib/themes.js'
+import { ASSET_BASE, BUILTIN_THEMES, BUILTIN_VIDEOS, DEFAULT_VIDEO_SRC, LOCKED_SKINS, themeById, themeImageUrl, translucentTokens } from '../../lib/themes.js'
 
 const NS = 'deep-theme'
 const SOURCE = 'deep-theme'
@@ -161,6 +161,12 @@ function isBackdropState(mode, btheme) {
   if (mode === 'image' || mode === 'video') return true
   if (mode === 'builtin') return btheme && btheme.kind === 'backdrop'
   return false
+}
+
+// 是否为受保护的默认皮肤（不可删除）。
+function isLockedSkin(kind, url) {
+  const list = (kind === 'video' ? LOCKED_SKINS.video : LOCKED_SKINS.image) || []
+  return typeof url === 'string' && !!url && list.indexOf(url) >= 0
 }
 
 // ── 视频：跟随鼠标（照搬 Character360, meng-you）───────────────────────
@@ -373,9 +379,10 @@ function ThemeManager({ scope, themeService, t }) {
   // 删除导入皮肤（两步确认）：第一次点「删除」→ 变「确认删除？」，再点才真正删除；
   // 删除后回退到内置默认（极光星云），默认皮肤不可删。
   const onDeleteImport = (kind) => {
+    const key = kind === 'video' ? 'videoSrc' : 'imageSrc'
+    if (isLockedSkin(kind, value[key])) { flash('这是默认皮肤，不可删除', false); return }
     if (confirmDel !== kind) { setConfirmDel(kind); flash('再点一次「确认删除」') ; return }
     setConfirmDel(null)
-    const key = kind === 'video' ? 'videoSrc' : 'imageSrc'
     const url = value[key]
     scope.set(key, '')
     if (url) {
@@ -433,8 +440,10 @@ function ThemeManager({ scope, themeService, t }) {
       ),
       imageSrc ? React.createElement('div', { className: 'dt-themecard active', style: { flexDirection: 'column' } },
         React.createElement('div', { className: 'swatch', style: { backgroundImage: `url(${imageSrc})`, backgroundSize: imageFit === 'contain' ? 'contain' : 'cover', backgroundPosition: 'center' } }),
-        React.createElement('div', { className: 'name' }, '导入图片'),
-        React.createElement('button', { className: 'dt-btn danger', onClick: () => onDeleteImport('image') }, confirmDel === 'image' ? '确认删除？' : t('delete')),
+        React.createElement('div', { className: 'name' }, isLockedSkin('image', imageSrc) ? '默认壁纸（不可删除）' : '导入图片'),
+        isLockedSkin('image', imageSrc)
+          ? React.createElement('span', { className: 'dt-hint' }, '受保护，不可删除')
+          : React.createElement('button', { className: 'dt-btn danger', onClick: () => onDeleteImport('image') }, confirmDel === 'image' ? '确认删除？' : t('delete')),
       ) : React.createElement('span', { className: 'dt-hint' }, t('noImage')),
       React.createElement('div', { className: 'dt-row' },
         React.createElement('span', { className: 'dt-hint' }, t('importHint')),
@@ -462,8 +471,10 @@ function ThemeManager({ scope, themeService, t }) {
       ),
       videoSrc ? React.createElement('div', { className: 'dt-themecard active', style: { flexDirection: 'column' } },
         React.createElement('div', { className: 'swatch', style: { background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9aa4b2', fontSize: 20 } }, '🎬'),
-        React.createElement('div', { className: 'name' }, '导入视频'),
-        React.createElement('button', { className: 'dt-btn danger', onClick: () => onDeleteImport('video') }, confirmDel === 'video' ? '确认删除？' : t('delete')),
+        React.createElement('div', { className: 'name' }, isLockedSkin('video', videoSrc) ? '默认视频（不可删除）' : '导入视频'),
+        isLockedSkin('video', videoSrc)
+          ? React.createElement('span', { className: 'dt-hint' }, '受保护，不可删除')
+          : React.createElement('button', { className: 'dt-btn danger', onClick: () => onDeleteImport('video') }, confirmDel === 'video' ? '确认删除？' : t('delete')),
       ) : null,
       React.createElement('div', { className: 'dt-row' },
         React.createElement('span', { className: 'dt-hint' }, t('importHint')),

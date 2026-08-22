@@ -16,6 +16,7 @@ import path from 'node:path'
 import { promises as fs } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import z from '@deepseek-ai/schemastery'
+import { LOCKED_DEFAULT_IMAGE, LOCKED_DEFAULT_VIDEO } from './lib/themes.js'
 
 export const name = 'deep-theme'
 export const inject = ['settings']
@@ -23,12 +24,12 @@ export const inject = ['settings']
 export const Config = z.object({
   enabled: z.boolean().default(true),
   // 三态互斥：builtin（内置主题）/ image（导入图片）/ video（视频：环绕跟随或循环播放）
-  mode: z.union(['builtin', 'image', 'video']).default('builtin'),
+  mode: z.union(['builtin', 'image', 'video']).default('image'),
   builtinId: z.string().default('aurora'),
-  imageSrc: z.string().default(''), // 导入的图片（/deep-theme/assets/imports/*），空 = 未导入
+  imageSrc: z.string().default(LOCKED_DEFAULT_IMAGE), // 默认壁纸（受保护不可删）
   imageFit: z.union(['cover', 'contain']).default('cover'),
   videoMode: z.union(['follow', 'loop']).default('follow'), // 跟随鼠标 / 循环播放
-  videoSrc: z.string().default(''), // 导入的视频（/deep-theme/assets/imports/*），空 = 内置环绕少女
+  videoSrc: z.string().default(LOCKED_DEFAULT_VIDEO), // 默认视频（受保护不可删）
   dim: z.number().min(0).max(0.7).default(0), // 背景压暗（蒙层强度），0 = 完全不压暗
   themeAlpha: z.number().min(0).max(1).default(0.75), // 主题面板/气泡不透明度（0=全透明背景全透, 1=实底）
   dialogAlpha: z.number().min(0).max(1).default(0.8), // 对话栏不透明度
