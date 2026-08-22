@@ -22,15 +22,15 @@ export const inject = ['settings']
 
 export const Config = z.object({
   enabled: z.boolean().default(true),
-  // 三态互斥：builtin（内置主题）/ image（静态图片）/ video（动态视频环绕跟随）
-  mode: z.union(['builtin', 'image', 'video']).default('image'),
-  builtinId: z.string().default('dark'),
-  imageSrc: z.string().default('preset:aurora'), // 内置预设 id 或 /deep-theme/assets/** 或 data URL
+  // 三态互斥：builtin（内置主题）/ image（导入图片）/ video（视频：环绕跟随或循环播放）
+  mode: z.union(['builtin', 'image', 'video']).default('builtin'),
+  builtinId: z.string().default('aurora'),
+  imageSrc: z.string().default(''), // 导入的图片（/deep-theme/assets/imports/*），空 = 未导入
   imageFit: z.union(['cover', 'contain']).default('cover'),
-  imageMask: z.boolean().default(true), // 全局遮罩保证文字可读
-  videoSrc: z.string().default(''), // 空 = 内置默认 /deep-theme/assets/videos/main-compressed.mp4
-  videoFollow: z.boolean().default(true), // 鼠标驱动环绕跟随帧
-  dim: z.number().min(0).max(0.7).default(0.35), // 背景变暗量，文字可读
+  videoMode: z.union(['follow', 'loop']).default('follow'), // 跟随鼠标 / 循环播放
+  videoSrc: z.string().default(''), // 导入的视频（/deep-theme/assets/imports/*），空 = 内置环绕少女
+  mask: z.boolean().default(false), // 蒙层（默认不加）
+  dim: z.number().min(0).max(0.7).default(0.3), // 蒙层强度
 })
 
 // 插件根目录（ESM：从 import.meta.url 推导）。
@@ -121,6 +121,22 @@ async function serveAsset(req, res) {
 async function handleApi(req, res, settings) {
   const url = new URL(req.url, 'http://localhost')
   const route = url.pathname.replace(/^\/deep-theme\/api/, '').replace(/\/+$/, '') || '/import'
+
+  // 删除导入的皮肤文件：DELETE /deep-theme/api/import  body|query { path: <url or filename> }
+  if (req.method === 'DELETE') {
+    let body = ''
+    for await (const chunk of req) body += chunk
+    let payload = {}
+    try { payload = JSON.parse(body || '{}') } catch { payload = {} }
+    const raw = String(payload.path || url.searchParams.get('path') || '')
+    // 从 url 或裸文件名提取 basename 后，限定在 imports 目录内删除（防路径穿越）。
+    const name = raw.split('/').pop().split('\\').pop()
+    if (!name) return json(res, 400, { ok: false, error: '缺少 path' })
+    const file = joinSafeImportPath(name)
+    await fs.rm(file, { force: true }).catch(() => {})
+    return json(res, 200, { ok: true })
+  }
+
   if (route !== '/import' || req.method !== 'POST') {
     return json(res, 404, { ok: false, error: '未知接口' })
   }
