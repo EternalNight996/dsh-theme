@@ -17,5 +17,5 @@
         videoMode: follow
         videoSrc: ''
         dim: 0
-        themeAlpha: 0.6
-        dialogAlpha: 0.56
+        themeAlpha: 0.75
+        dialogAlpha: 0.8
