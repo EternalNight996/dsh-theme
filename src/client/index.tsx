@@ -31,6 +31,8 @@ const CSS = `
 @keyframes dt-fade-in { from { opacity: 0; } to { opacity: 1; } }
 
 .dt-panel { display: flex; flex-direction: column; gap: 18px; }
+/* 设置界面：即使背景皮肤透出，设置面板本身保持不透明，避免透底看不清 */
+.dt-settings { background: var(--dsw-alias-bg-overlay); border: 1px solid var(--dsw-alias-border-l1); border-radius: 14px; padding: 18px 20px; box-shadow: 0 8px 28px rgba(0,0,0,0.12); }
 .dt-label { font-weight: 600; font-size: 13px; color: var(--dsw-alias-label-primary); }
 .dt-hint { font-size: 12px; opacity: 0.65; color: var(--dsw-alias-label-secondary); }
 .dt-seq { display: inline-flex; gap: 4px; padding: 3px; border-radius: 999px; background: var(--dsw-alias-bg-base); }
@@ -92,12 +94,12 @@ const ZH = {
   modeLoop: '循环播放',
   modeLoopHint: '视频自动循环播放，作为背景。',
   mask: '蒙层',
-  maskHint: '默认不加；开启后给背景加一层变暗，提升文字可读性。',
+  maskHint: '背景压暗（0 = 不压暗，拖动实时生效，仅影响背景不影响文字）。',
   delete: '删除',
   fit: '铺满方式',
   fitCover: '铺满 cover',
   fitContain: '完整 contain',
-  dimLabel: '蒙层强度',
+  dimLabel: '背景压暗',
   preview: '预览',
   reset: '恢复默认',
   apply: '启用',
@@ -123,12 +125,12 @@ const EN = {
   modeLoop: 'Loop',
   modeLoopHint: 'Autoplay looping video as the background.',
   mask: 'Mask',
-  maskHint: 'Off by default; dims the background for better text readability.',
+  maskHint: 'Dims the background (0 = off; drag to live-dim; only affects the backdrop, not text).',
   delete: 'Delete',
   fit: 'Fit',
   fitCover: 'Cover',
   fitContain: 'Contain',
-  dimLabel: 'Mask strength',
+  dimLabel: 'Dim',
   preview: 'Preview',
   reset: 'Reset defaults',
   apply: 'Apply',
@@ -234,8 +236,7 @@ function BackgroundLayer({ scope, themeService, t }) {
   const imageFit = value && value.imageFit ? value.imageFit : 'cover'
   const videoMode = value && value.videoMode ? value.videoMode : 'follow'
   const videoSrc = (value && value.videoSrc) || DEFAULT_VIDEO_SRC
-  const mask = value ? value.mask === true : false
-  const dim = value && typeof value.dim === 'number' ? Math.min(0.7, Math.max(0, value.dim)) : 0.3
+  const dim = value && typeof value.dim === 'number' ? Math.min(0.7, Math.max(0, value.dim)) : 0
 
   const btheme = themeById(builtinId)
   const backdrop = isBackdropState(mode, btheme)
@@ -263,7 +264,7 @@ function BackgroundLayer({ scope, themeService, t }) {
     media = React.createElement(VideoSkin, { src: videoSrc, mode: videoMode, active: videoMode !== 'loop' })
   }
 
-  const maskEl = backdrop && mask
+  const maskEl = backdrop && dim > 0
     ? React.createElement('div', { className: 'dt-bg-mask', style: { background: `rgba(0,0,0,${dim})` } })
     : null
 
@@ -299,8 +300,7 @@ function ThemeManager({ scope, themeService, t }) {
   const imageFit = value.imageFit || 'cover'
   const videoMode = value.videoMode || 'follow'
   const videoSrc = value.videoSrc || ''
-  const mask = value.mask === true
-  const dim = typeof value.dim === 'number' ? value.dim : 0.3
+  const dim = typeof value.dim === 'number' ? Math.min(0.7, Math.max(0, value.dim)) : 0
 
   const btheme = themeById(builtinId)
   const backdrop = isBackdropState(mode, btheme)
@@ -391,20 +391,20 @@ function ThemeManager({ scope, themeService, t }) {
       ),
     ) : null,
 
-    // 图片皮肤（导入图片 + 蒙层）
+    // 图片皮肤（导入图片 + 铺满方式，结构对齐视频皮肤）
     mode === 'image' ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
-      imageSrc ? React.createElement('div', { className: 'dt-themecard active', style: { flexDirection: 'column' } },
-        React.createElement('div', { className: 'swatch', style: { backgroundImage: `url(${imageSrc})`, backgroundSize: imageFit === 'contain' ? 'contain' : 'cover', backgroundPosition: 'center' } }),
-        React.createElement('div', { className: 'name' }, '导入图片'),
-        React.createElement('button', { className: 'dt-btn danger', onClick: () => onDeleteImport('image') }, t('delete')),
-      ) : React.createElement('span', { className: 'dt-hint' }, t('noImage')),
       React.createElement('div', { className: 'dt-row' },
-        React.createElement('span', { className: 'dt-hint' }, t('fit')),
+        React.createElement('span', { className: 'dt-label' }, t('fit')),
         React.createElement('div', { className: 'dt-seq' },
           React.createElement('button', { className: imageFit === 'cover' ? 'active' : '', onClick: () => set('imageFit', 'cover', t('fitCover')) }, t('fitCover')),
           React.createElement('button', { className: imageFit === 'contain' ? 'active' : '', onClick: () => set('imageFit', 'contain', t('fitContain')) }, t('fitContain')),
         ),
       ),
+      imageSrc ? React.createElement('div', { className: 'dt-themecard active', style: { flexDirection: 'column' } },
+        React.createElement('div', { className: 'swatch', style: { backgroundImage: `url(${imageSrc})`, backgroundSize: imageFit === 'contain' ? 'contain' : 'cover', backgroundPosition: 'center' } }),
+        React.createElement('div', { className: 'name' }, '导入图片'),
+        React.createElement('button', { className: 'dt-btn danger', onClick: () => onDeleteImport('image') }, t('delete')),
+      ) : React.createElement('span', { className: 'dt-hint' }, t('noImage')),
       React.createElement('div', { className: 'dt-row' },
         React.createElement('span', { className: 'dt-hint' }, t('importHint')),
         React.createElement('button', { className: 'dt-btn primary', onClick: () => { const el = fileRef.current; if (el) { el.accept = 'image/png,image/jpeg,image/webp'; el.onchange = (e) => { onImport('image', e.target.files && e.target.files[0]); e.target.value = '' }; el.click() } } }, t('importImage')),
@@ -440,17 +440,11 @@ function ThemeManager({ scope, themeService, t }) {
       ),
     ) : null,
 
-    // 蒙层（图片/视频/内置背景皮肤共用，默认不加）
-    backdrop ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--dsw-alias-border-l1)', paddingTop: 14 } },
-      React.createElement('div', { className: 'dt-row' },
-        React.createElement('span', { className: 'dt-label' }, t('mask')),
-        React.createElement('button', { className: 'dt-btn', onClick: () => set('mask', !mask, t('mask') + '：' + (!mask ? '开' : '关')), 'aria-pressed': mask }, mask ? '开' : '关'),
-      ),
+    // 背景压暗（蒙层强度滑杆，默认 0 = 不压暗）
+    backdrop ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid var(--dsw-alias-border-l1)', paddingTop: 14 } },
+      React.createElement('span', { className: 'dt-label' }, t('dimLabel')),
+      React.createElement('input', { className: 'dt-slider', type: 'range', min: 0, max: 0.7, step: 0.05, value: dim, onChange: (e) => set('dim', parseFloat(e.target.value), t('dimLabel') + '：' + Math.round(e.target.value * 100) + '%') }),
       React.createElement('span', { className: 'dt-hint' }, t('maskHint')),
-      mask ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
-        React.createElement('span', { className: 'dt-label' }, t('dimLabel')),
-        React.createElement('input', { className: 'dt-slider', type: 'range', min: 0, max: 0.7, step: 0.05, value: dim, onChange: (e) => set('dim', parseFloat(e.target.value)) }),
-      ) : null,
     ) : null,
 
     // 预览
@@ -458,12 +452,12 @@ function ThemeManager({ scope, themeService, t }) {
       React.createElement('span', { className: 'dt-label' }, t('preview')),
       React.createElement('div', { className: 'dt-preview' },
         React.createElement('div', { className: 'pbg', style: previewStyle }),
-        mask ? React.createElement('div', { className: 'pmask', style: { background: `rgba(0,0,0,${dim})` } }) : null,
+        dim > 0 ? React.createElement('div', { className: 'pmask', style: { background: `rgba(0,0,0,${dim})` } }) : null,
       ),
     ) : null,
 
     React.createElement('div', { style: { display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'flex-end' } },
-      React.createElement('button', { className: 'dt-btn', onClick: () => { set('mode', 'builtin'); set('builtinId', 'aurora'); set('imageSrc', ''); set('imageFit', 'cover'); set('videoMode', 'follow'); set('videoSrc', ''); set('mask', false); set('dim', 0.3); flash('已恢复默认：极光星云') } }, t('reset')),
+      React.createElement('button', { className: 'dt-btn', onClick: () => { set('mode', 'builtin'); set('builtinId', 'aurora'); set('imageSrc', ''); set('imageFit', 'cover'); set('videoMode', 'follow'); set('videoSrc', ''); set('dim', 0); flash('已恢复默认：极光星云') } }, t('reset')),
       React.createElement('button', { className: 'dt-btn primary', onClick: () => { scope.set('enabled', true); flash('✓ 已应用：' + modeName() + appliedLabel) } }, t('apply')),
     ),
 
@@ -509,7 +503,7 @@ function ThemeFooterButton({ scope, themeService, t, wide }) {
 
 // ── 设置分区 ──────────────────────────────────────────────────────────────
 function ThemeSettings({ scope, themeService, t }) {
-  return React.createElement('div', { className: 'dt-panel', style: { padding: 16, maxWidth: 640 } },
+  return React.createElement('div', { className: 'dt-settings', style: { maxWidth: 680 } },
     React.createElement('style', null, CSS),
     React.createElement(ThemeManager, { scope, themeService, t }),
   )

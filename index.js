@@ -29,8 +29,7 @@ export const Config = z.object({
   imageFit: z.union(['cover', 'contain']).default('cover'),
   videoMode: z.union(['follow', 'loop']).default('follow'), // 跟随鼠标 / 循环播放
   videoSrc: z.string().default(''), // 导入的视频（/deep-theme/assets/imports/*），空 = 内置环绕少女
-  mask: z.boolean().default(false), // 蒙层（默认不加）
-  dim: z.number().min(0).max(0.7).default(0.3), // 蒙层强度
+  dim: z.number().min(0).max(0.7).default(0), // 背景压暗（蒙层强度），0 = 完全不压暗
 })
 
 // 插件根目录（ESM：从 import.meta.url 推导）。

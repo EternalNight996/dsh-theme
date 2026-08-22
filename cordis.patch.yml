@@ -16,5 +16,4 @@
         imageFit: cover
         videoMode: follow
         videoSrc: ''
-        mask: false
-        dim: 0.3
+        dim: 0
