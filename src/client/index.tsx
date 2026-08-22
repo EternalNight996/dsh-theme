@@ -176,25 +176,38 @@ function VideoFollow({ src, active }) {
     let target = current
     let raf = 0
     let lastSeek = 0
-    let lastMove = 0
-    const IDLE_MS = 500
+    let lastMove = performance.now()
+    const IDLE_MS = 600
+    const SEEK_THROTTLE = 90 // ≈11Hz 真正 seek，1080p 下显著减少解码开销
+    const MIN_SEEK_DELTA = 0.035 // 秒，跳过微小位移，避免无谓 seek
     const DURATION = () => (Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 5)
+
     const seekTo = (t) => {
       if (!Number.isFinite(t)) return
+      if (document.hidden) return // 后台不 seek
+      if (video.readyState < 2) return // 数据不足不 seek
       const now = performance.now()
-      if (now - lastSeek < 60) return
-      if (video.seeking) return
+      if (now - lastSeek < SEEK_THROTTLE) return
+      if (video.seeking) return // 正在 seek，下一帧再试，避免堆积打断
       const next = t * DURATION()
-      if (Math.abs(next - video.currentTime) > 0.02) { video.currentTime = next; lastSeek = now }
+      if (Math.abs(next - video.currentTime) > MIN_SEEK_DELTA) {
+        video.currentTime = next
+        lastSeek = now
+      }
     }
+
     const step = () => {
       let diff = target - current
       diff -= Math.round(diff)
-      const done = Math.abs(diff) < 0.004
+      const done = Math.abs(diff) < 0.003
       current = wrap01(current + diff * 0.14)
       seekTo(current)
-      if (done && performance.now() - lastMove > IDLE_MS) { raf = 0; return }
-      raf = requestAnimationFrame(step)
+      // 到位且鼠标静止 → 停止 rAF 避免空转；后台窗口也停
+      if (!document.hidden && !(done && performance.now() - lastMove > IDLE_MS)) {
+        raf = requestAnimationFrame(step)
+      } else {
+        raf = 0
+      }
     }
     const start = () => { if (!raf) raf = requestAnimationFrame(step) }
     const onMove = (e) => {
@@ -203,7 +216,7 @@ function VideoFollow({ src, active }) {
       const cy = window.innerHeight / 2
       const angle = Math.atan2(e.clientY - cy, e.clientX - cx)
       target = wrap01((angle - START) / (2 * Math.PI))
-      start()
+      if (!document.hidden) start()
     }
     const onLoaded = () => {
       seekTo(current)

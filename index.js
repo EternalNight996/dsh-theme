@@ -158,7 +158,10 @@ async function handleApi(req, res, settings) {
   if (!buf.length) return json(res, 400, { ok: false, error: '数据为空' })
 
   const ext = kind === 'video' ? '.mp4' : '.png'
-  const safeName = (rawName.replace(/[^\w.\-]+/g, '_').replace(/\.+$/, '') || 'imported') + ext
+  // 去掉非法字符，并避免重复扩展名（如 foo.png 不再追加成 foo.png.png）。
+  const rawClean = rawName.replace(/[^\w.\-]+/g, '_').replace(/\.+$/, '')
+  const base = (rawClean || 'imported').replace(new RegExp(ext.replace('.', '\\.') + '$', 'i'), '')
+  const safeName = base + ext
   await fs.mkdir(IMPORTS_DIR, { recursive: true })
   const target = joinSafeImportPath(safeName)
   await fs.writeFile(target, buf)
