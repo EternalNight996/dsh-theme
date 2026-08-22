@@ -2,6 +2,7 @@ node_modules/
 *.log
 .DS_Store
 lib/client.tmp.js
-assets/imports/
+assets/import-images/
+assets/import-videos/
 .dsh-vision-router/
 

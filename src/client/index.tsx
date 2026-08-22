@@ -45,6 +45,8 @@ const CSS = `
 .dt-themecard .swatch { height: 60px; border-radius: 8px; }
 .dt-themecard .name { font-size: 12.5px; font-weight: 600; }
 .dt-themecard .sub { font-size: 10.5px; opacity: 0.6; }
+.dt-clickable { cursor: pointer; }
+.dt-clickable:hover { border-color: var(--dsw-alias-brand-primary); }
 .dt-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .dt-btn { border: 1px solid var(--dsw-alias-border-l2); background: transparent; color: var(--dsw-alias-label-primary); border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
 .dt-btn:hover { background: var(--dsw-alias-bg-layer-1); }
@@ -456,10 +458,10 @@ function ThemeManager({ scope, themeService, t }) {
           React.createElement('div', { className: 'name' }, '默认壁纸（不可删除）'),
           React.createElement('div', { className: 'sub' }, '受保护'),
         ),
-        importedImages.map((url) => React.createElement('div', { key: url, className: 'dt-themecard' + (imageSrc === url ? ' active' : '') },
+        importedImages.map((url) => React.createElement('div', { key: url, role: 'button', tabIndex: 0, className: 'dt-themecard dt-clickable' + (imageSrc === url ? ' active' : ''), onClick: () => set('imageSrc', url, '已切换到：导入图片') },
           React.createElement('div', { className: 'swatch', style: { backgroundImage: `url(${url})`, backgroundSize: imageFit === 'contain' ? 'contain' : 'cover', backgroundPosition: 'center' } }),
           React.createElement('div', { className: 'name' }, '导入图片'),
-          React.createElement('button', { className: 'dt-btn danger', onClick: () => onDeleteImport('image', url) }, confirmDel === ('image|' + url) ? '确认删除？' : t('delete')),
+          React.createElement('button', { className: 'dt-btn danger', onClick: (e) => { e.stopPropagation(); onDeleteImport('image', url) } }, confirmDel === ('image|' + url) ? '确认删除？' : t('delete')),
         )),
       ),
       importedImages.length === 0 ? React.createElement('span', { className: 'dt-hint' }, t('noImage')) : null,
@@ -491,10 +493,10 @@ function ThemeManager({ scope, themeService, t }) {
           React.createElement('div', { className: 'swatch', style: { background: 'repeating-linear-gradient(135deg, #1b2230 0 12px, #141b28 12px 24px)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9aa4b2', fontSize: 20 } }, '🎬'),
           React.createElement('div', { className: 'name' }, v.name),
         )),
-        importedVideos.map((url) => React.createElement('div', { key: url, className: 'dt-themecard' + (videoSrc === url ? ' active' : '') },
+        importedVideos.map((url) => React.createElement('div', { key: url, role: 'button', tabIndex: 0, className: 'dt-themecard dt-clickable' + (videoSrc === url ? ' active' : ''), onClick: () => set('videoSrc', url, '已切换到：导入视频') },
           React.createElement('div', { className: 'swatch', style: { background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9aa4b2', fontSize: 20 } }, '🎬'),
           React.createElement('div', { className: 'name' }, '导入视频'),
-          React.createElement('button', { className: 'dt-btn danger', onClick: () => onDeleteImport('video', url) }, confirmDel === ('video|' + url) ? '确认删除？' : t('delete')),
+          React.createElement('button', { className: 'dt-btn danger', onClick: (e) => { e.stopPropagation(); onDeleteImport('video', url) } }, confirmDel === ('video|' + url) ? '确认删除？' : t('delete')),
         )),
       ),
       React.createElement('div', { className: 'dt-row' },

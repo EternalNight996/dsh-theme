@@ -40,7 +40,8 @@ export const Config = z.object({
 // 插件根目录（ESM：从 import.meta.url 推导）。
 const PLUGIN_ROOT = path.dirname(fileURLToPath(import.meta.url))
 const ASSETS_DIR = path.join(PLUGIN_ROOT, 'assets')
-const IMPORTS_DIR = path.join(ASSETS_DIR, 'imports')
+const IMAGE_IMPORTS_DIR = path.join(ASSETS_DIR, 'import-images')
+const VIDEO_IMPORTS_DIR = path.join(ASSETS_DIR, 'import-videos')
 
 const MIME = {
   '.mp4': 'video/mp4',
@@ -58,12 +59,11 @@ export function apply(ctx, config) {
   // 设置命名空间（base 传 composition 配置，层序 = schema 默认 → base → 用户覆盖）。
   const settings = ctx.settings.register('deep-theme', Config, { base: config ?? {} })
 
-  // 确保 assets/imports 目录存在（首次激活）。
+  // 确保导入目录存在（首次激活）：图片在 import-images/，视频在 import-videos/。
   ctx.effect(() => {
-    fs.mkdir(IMPORTS_DIR, { recursive: true }).catch((error) => {
-      console.error('[deep-theme] mkdir imports failed:', error)
-    })
-  }, 'deep-theme: ensure imports dir')
+    fs.mkdir(IMAGE_IMPORTS_DIR, { recursive: true }).catch((e) => console.error('[deep-theme] mkdir import-images failed:', e))
+    fs.mkdir(VIDEO_IMPORTS_DIR, { recursive: true }).catch((e) => console.error('[deep-theme] mkdir import-videos failed:', e))
+  }, 'deep-theme: ensure import dirs')
 
   // -- 静态资源服务：/deep-theme/assets/* ────────────────────────────────
   const webServer = ctx.get('webServer')
@@ -133,11 +133,11 @@ async function handleApi(req, res, settings) {
     let payload = {}
     try { payload = JSON.parse(body || '{}') } catch { payload = {} }
     const raw = String(payload.path || url.searchParams.get('path') || '')
-    // 从 url 或裸文件名提取 basename 后，限定在 imports 目录内删除（防路径穿越）。
+    // 从 url 或裸文件名提取 basename 后，按类型目录删除（防路径穿越）。
     const name = raw.split('/').pop().split('\\').pop()
     if (!name) return json(res, 400, { ok: false, error: '缺少 path' })
-    const file = joinSafeImportPath(name)
-    await fs.rm(file, { force: true }).catch(() => {})
+    const dir = raw.indexOf('import-videos') >= 0 ? VIDEO_IMPORTS_DIR : IMAGE_IMPORTS_DIR
+    await fs.rm(path.join(dir, name), { force: true }).catch(() => {})
     return json(res, 200, { ok: true })
   }
 
@@ -165,17 +165,12 @@ async function handleApi(req, res, settings) {
   const rawClean = rawName.replace(/[^\w.\-]+/g, '_').replace(/\.+$/, '')
   const base = (rawClean || 'imported').replace(new RegExp(ext.replace('.', '\\.') + '$', 'i'), '')
   const safeName = base + ext
-  await fs.mkdir(IMPORTS_DIR, { recursive: true })
-  const target = joinSafeImportPath(safeName)
-  await fs.writeFile(target, buf)
-  const fileBase = safeName.replace(/\\/g, '/')
-  const urlOut = `/deep-theme/assets/imports/${encodeURIComponent(fileBase)}`
+  const dir = kind === 'video' ? VIDEO_IMPORTS_DIR : IMAGE_IMPORTS_DIR
+  await fs.mkdir(dir, { recursive: true })
+  await fs.writeFile(path.join(dir, safeName), buf)
+  const sub = kind === 'video' ? 'import-videos' : 'import-images'
+  const urlOut = `/deep-theme/assets/${sub}/${encodeURIComponent(safeName)}`
   json(res, 200, { ok: true, url: urlOut, kind })
-}
-
-function joinSafeImportPath(name) {
-  const clean = name.split(/[/\\]/).pop()
-  return path.join(IMPORTS_DIR, clean)
 }
 
 function sendText(res, status, text) {
