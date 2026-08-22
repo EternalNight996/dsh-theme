@@ -1,0 +1,78 @@
+{
+  "name": "dsh-ui-deep-theme",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness 主题皮肤插件：给 DSH Web GUI 换背景（内置主题 / 静态图片 / 动态视频环绕跟随帧），设置页与侧边栏底部一键切换。",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EternalNight996/dsh-ui-deep-theme.git"
+  },
+  "homepage": "https://github.com/EternalNight996/dsh-ui-deep-theme",
+  "author": "EternalNight996",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "lib",
+    "assets",
+    "cordis.patch.yml",
+    "README.md",
+    "PUBLISH.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "theme",
+    "skin",
+    "background",
+    "wallpaper",
+    "video-background",
+    "360-follow"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "build:client": "node build.mjs",
+    "prepublishOnly": "node build.mjs",
+    "gen:bg": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/gen-bgs.ps1"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "@types/react": "^18.3.1"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-api-remotes"
+      ]
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

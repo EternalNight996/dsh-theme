@@ -1,0 +1,20 @@
+# 主题皮肤（dsh-ui-deep-theme）bundle 补丁层。
+# 安装后由 package.json 的 dsh.bundle.patch 自动生效；后层
+# （profile 自己的 cordis.patch.yml / --patch）可按 id 覆盖或禁用本行。
+#
+# 客户端 UI（背景层 + 设置 → 主题 + 侧边栏「🎨 主题」按钮）由 package.json 的
+# dsh.client 元数据自动挂载，无需在此声明任何 client 行。
+
+- insert:
+    - id: deep-theme
+      name: dsh-ui-deep-theme
+      config:
+        enabled: true
+        mode: builtin
+        builtinId: dark
+        imageSrc: ''
+        imageFit: cover
+        imageMask: true
+        videoSrc: ''
+        videoFollow: true
+        dim: 0.35
