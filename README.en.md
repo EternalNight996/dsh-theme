@@ -87,6 +87,8 @@ npm run gen:bg       # regenerate built-in backgrounds (optional)
 
 ## 📜 Changelog
 
+- **v0.1.4** Re-publish: marketplace-ready (GitHub topics + `dsh.marketplace` metadata).
+- **v0.1.3** Add `dsh.marketplace` metadata (RP inclusion check passed).
 - **v0.1.2** Separate zh/en docs: `README.md` (Chinese) & `README.en.md` (English), with language switcher at top.
 - **v0.1.1** README redesign: MVCheck-style centered banner + badges + showcase assets at front; roadmap; changelog; marketplace-ready (GitHub topics `dsh-plugin` etc.).
 - **v0.1.0** Initial release: background layer, Settings → Theme, sidebar 🎨 button; three skin modes (built-in / image / 360°-follow video); video follow-mouse & loop; adjustable transparency (panel / dialog / dim); import persistence to `import-images`/`import-videos` + two-step delete; non-deletable `default.png`/`default.mp4`; filename-named skins (≤15 chars); font/buttons adapt to DSH appearance; follow-mouse perf (throttled seeks / background pause / idle stop).
