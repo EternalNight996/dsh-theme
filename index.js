@@ -114,10 +114,20 @@ async function serveAsset(req, res) {
   const buf = await fs.readFile(file).catch(() => null)
   if (!buf) return sendText(res, 404, 'not found')
   const ext = path.extname(file).toLowerCase()
+  // 用 mtime 做 Last-Modified；配合 If-Modified-Since → 304，实现「每次 revalidate、
+  // 更新后浏览器立即拿到新资源」——避免升级后仍用旧缓存（曾致视频跟随卡顿）。
+  const lastModified = await fs.stat(file).then((s) => s.mtime.toUTCString()).catch(() => undefined)
+  const ifModifiedSince = req.headers && req.headers['if-modified-since']
+  if (lastModified && ifModifiedSince === lastModified) {
+    res.writeHead(304, { 'Last-Modified': lastModified })
+    return res.end()
+  }
   res.writeHead(200, {
     'Content-Type': MIME[ext] || 'application/octet-stream',
     'Content-Length': buf.length,
-    'Cache-Control': 'public, max-age=3600',
+    'Last-Modified': lastModified,
+    // no-cache：浏览器绝不直接用缓存，总是发条件请求；避免 max-age 导致的过期资源。
+    'Cache-Control': 'no-cache',
   })
   res.end(buf)
 }
