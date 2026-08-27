@@ -345,28 +345,28 @@ function ThemeManager({ scope, themeService, t }) {
   const [ready, setReady] = useState(false)
   const fileRef = useRef(null)
   const [confirmDel, setConfirmDel] = useState(null) // 'image' | 'video' | null：待确认删除
-  const [sliderDraft, setSliderDraft] = useState(null) // 滑块草稿：拖动只改面板预览，点「启用」才批量写入 scope（避免高频 overrideTokens 卡顿）
+  const [draft, setDraftState] = useState({}) // 外观配置草稿（增量 key→新值）：选择/拖动只改面板预览，点「启用」才批量写入 scope，避免高频 overrideTokens 卡顿
+  // helpers：草稿有值取草稿，否则回落已应用 value。
+  const dv = (k, fb) => (Object.prototype.hasOwnProperty.call(draft, k) ? draft[k] : fb)
+  const setDraft = (k, v) => setDraftState((s) => ({ ...s, [k]: v }))
 
   useEffect(() => { if (value && !ready) setReady(true) }, [value, ready])
   useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current) }, [])
 
   if (!value || !ready) return React.createElement('div', { style: { padding: 16, opacity: 0.6 } }, t('loading'))
 
-  const mode = value.mode || 'builtin'
-  const builtinId = value.builtinId || 'aurora'
-  const imageSrc = value.imageSrc || ''
-  const imageFit = value.imageFit || 'cover'
-  const videoMode = value.videoMode || 'follow'
-  const videoSrc = value.videoSrc || ''
+  // 外观配置：草稿有值取草稿，未修改回落 scope；资源库（importedImages/importedVideos）始终即时读 scope。
+  const mode = dv('mode', value.mode || 'builtin')
+  const builtinId = dv('builtinId', value.builtinId || 'aurora')
+  const imageSrc = dv('imageSrc', value.imageSrc || '')
+  const imageFit = dv('imageFit', value.imageFit || 'cover')
+  const videoMode = dv('videoMode', value.videoMode || 'follow')
+  const videoSrc = dv('videoSrc', value.videoSrc || '')
   const importedImages = value.importedImages && Array.isArray(value.importedImages) ? value.importedImages : []
   const importedVideos = value.importedVideos && Array.isArray(value.importedVideos) ? value.importedVideos : []
-  const dim = typeof value.dim === 'number' ? Math.min(0.7, Math.max(0, value.dim)) : 0
-  const themeAlpha = typeof value.themeAlpha === 'number' ? Math.min(1, Math.max(0, value.themeAlpha)) : 1
-  const dialogAlpha = typeof value.dialogAlpha === 'number' ? Math.min(1, Math.max(0, value.dialogAlpha)) : 0
-  // 滑块草稿值：优先取草稿，未拖动时回落到已应用值。
-  const sDim = sliderDraft ? sliderDraft.dim : dim
-  const sThemeAlpha = sliderDraft ? sliderDraft.themeAlpha : themeAlpha
-  const sDialogAlpha = sliderDraft ? sliderDraft.dialogAlpha : dialogAlpha
+  const dim = dv('dim', typeof value.dim === 'number' ? Math.min(0.7, Math.max(0, value.dim)) : 0)
+  const themeAlpha = dv('themeAlpha', typeof value.themeAlpha === 'number' ? Math.min(1, Math.max(0, value.themeAlpha)) : 1)
+  const dialogAlpha = dv('dialogAlpha', typeof value.dialogAlpha === 'number' ? Math.min(1, Math.max(0, value.dialogAlpha)) : 0)
 
   const btheme = themeById(builtinId)
   const backdrop = isBackdropState(mode, btheme)
@@ -376,7 +376,7 @@ function ThemeManager({ scope, themeService, t }) {
     if (toastTimer.current) clearTimeout(toastTimer.current)
     toastTimer.current = setTimeout(() => setToast(null), 2400)
   }
-  const set = (k, v, fb) => { scope.set(k, v); if (fb) flash(fb) }
+  const sel = (k, v, name) => { setDraft(k, v); flash('已选：' + name + '，点「启用」生效') }
   const modeName = () => mode === 'builtin' ? t('modeBuiltin') : mode === 'image' ? t('modeImage') : t('modeVideo')
   const appliedLabel = mode === 'builtin'
     ? ' · ' + btheme.name
@@ -404,10 +404,10 @@ function ThemeManager({ scope, themeService, t }) {
             const url = res.url
             if (!isLockedSkin(kind, url)) {
               const cur = value[libKey(kind)] || []
-              if (cur.indexOf(url) < 0) scope.set(libKey(kind), cur.concat(url))
+              if (cur.indexOf(url) < 0) scope.set(libKey(kind), cur.concat(url)) // 库即时持久化
             }
-            scope.set(activeKey(kind), url)
-            flash(kind === 'video' ? '视频已导入并应用' : '图片已导入并应用')
+            setDraft(activeKey(kind), url) // 当前激活设为草稿，不即时切换背景
+            flash(kind === 'video' ? '视频已导入，点「启用」应用' : '图片已导入，点「启用」应用')
           } else {
             flash('导入失败：' + ((res && res.error) || 'unknown'), false)
           }
@@ -427,9 +427,9 @@ function ThemeManager({ scope, themeService, t }) {
     if (confirmDel !== token) { setConfirmDel(token); flash('再点一次「确认删除」'); return }
     setConfirmDel(null)
     scope.set(libKey(kind), (value[libKey(kind)] || []).filter((u) => u !== target))
-    if (value[activeKey(kind)] === target) scope.set(activeKey(kind), lockedDefault(kind))
+    if (dv(activeKey(kind), value[activeKey(kind)]) === target) setDraft(activeKey(kind), lockedDefault(kind)) // 回退激活到草稿，不即时切换
     fetch('/dsh-theme/api/import', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: target }) }).catch(() => {})
-    flash(kind === 'video' ? '已删除导入视频，回到默认' : '已删除导入图片，回到默认壁纸')
+    flash(kind === 'video' ? '已删除导入视频，回退默认；点「启用」应用' : '已删除导入图片，回退默认壁纸；点「启用」应用')
   }
 
   const modeOptions = [['builtin', t('modeBuiltin')], ['image', t('modeImage')], ['video', t('modeVideo')]]
@@ -446,7 +446,7 @@ function ThemeManager({ scope, themeService, t }) {
 
     // 三态切换
     React.createElement('div', { className: 'dt-seq' },
-      modeOptions.map(([v, label]) => React.createElement('button', { key: v, className: mode === v ? 'active' : '', onClick: () => set('mode', v, `已切换：${label}`), 'aria-pressed': mode === v }, label)),
+      modeOptions.map(([v, label]) => React.createElement('button', { key: v, className: mode === v ? 'active' : '', onClick: () => sel('mode', v, label), 'aria-pressed': mode === v }, label)),
     ),
 
     // 内置主题（配色 + 背景皮肤）
@@ -460,7 +460,7 @@ function ThemeManager({ scope, themeService, t }) {
           const sub = th.kind === 'backdrop' ? t('backdropHint') : (th.dark ? '暗色' : '亮色')
           return React.createElement('button', {
             key: th.id, className: 'dt-themecard' + (builtinId === th.id ? ' active' : ''),
-            onClick: () => set('builtinId', th.id, '已切换：' + th.name),
+            onClick: () => sel('builtinId', th.id, th.name),
           },
             React.createElement('div', { className: 'swatch', style: swatch }),
             React.createElement('div', { className: 'name' }, th.name),
@@ -475,17 +475,17 @@ function ThemeManager({ scope, themeService, t }) {
       React.createElement('div', { className: 'dt-row' },
         React.createElement('span', { className: 'dt-label' }, t('fit')),
         React.createElement('div', { className: 'dt-seq' },
-          React.createElement('button', { className: imageFit === 'cover' ? 'active' : '', onClick: () => set('imageFit', 'cover', t('fitCover')) }, t('fitCover')),
-          React.createElement('button', { className: imageFit === 'contain' ? 'active' : '', onClick: () => set('imageFit', 'contain', t('fitContain')) }, t('fitContain')),
+          React.createElement('button', { className: imageFit === 'cover' ? 'active' : '', onClick: () => sel('imageFit', 'cover', t('fitCover')) }, t('fitCover')),
+          React.createElement('button', { className: imageFit === 'contain' ? 'active' : '', onClick: () => sel('imageFit', 'contain', t('fitContain')) }, t('fitContain')),
         ),
       ),
       React.createElement('div', { className: 'dt-cardgrid' },
-        React.createElement('button', { className: 'dt-themecard' + (imageSrc === lockedDefault('image') ? ' active' : ''), onClick: () => set('imageSrc', lockedDefault('image'), '已切换到默认壁纸') },
+        React.createElement('button', { className: 'dt-themecard' + (imageSrc === lockedDefault('image') ? ' active' : ''), onClick: () => sel('imageSrc', lockedDefault('image'), '默认壁纸') },
           React.createElement('div', { className: 'swatch', style: { backgroundImage: `url(${lockedDefault('image')})`, backgroundSize: 'cover', backgroundPosition: 'center' } }),
           React.createElement('div', { className: 'name' }, '默认壁纸（不可删除）'),
           React.createElement('div', { className: 'sub' }, '受保护'),
         ),
-        importedImages.map((url) => React.createElement('div', { key: url, role: 'button', tabIndex: 0, className: 'dt-themecard dt-clickable' + (imageSrc === url ? ' active' : ''), onClick: () => set('imageSrc', url, '已切换到：' + skinName(url)) },
+        importedImages.map((url) => React.createElement('div', { key: url, role: 'button', tabIndex: 0, className: 'dt-themecard dt-clickable' + (imageSrc === url ? ' active' : ''), onClick: () => sel('imageSrc', url, skinName(url)) },
           React.createElement('div', { className: 'swatch', style: { backgroundImage: `url(${url})`, backgroundSize: imageFit === 'contain' ? 'contain' : 'cover', backgroundPosition: 'center' } }),
           React.createElement('div', { className: 'name' }, skinName(url)),
           React.createElement('button', { className: 'dt-btn danger', onClick: (e) => { e.stopPropagation(); onDeleteImport('image', url) } }, confirmDel === ('image|' + url) ? '确认删除？' : t('delete')),
@@ -503,24 +503,24 @@ function ThemeManager({ scope, themeService, t }) {
       React.createElement('div', { className: 'dt-row' },
         React.createElement('span', { className: 'dt-label' }, t('videoMode')),
         React.createElement('div', { className: 'dt-seq' },
-          React.createElement('button', { className: videoMode === 'follow' ? 'active' : '', onClick: () => set('videoMode', 'follow', t('modeFollow')) }, t('modeFollow')),
-          React.createElement('button', { className: videoMode === 'loop' ? 'active' : '', onClick: () => set('videoMode', 'loop', t('modeLoop')) }, t('modeLoop')),
+          React.createElement('button', { className: videoMode === 'follow' ? 'active' : '', onClick: () => sel('videoMode', 'follow', t('modeFollow')) }, t('modeFollow')),
+          React.createElement('button', { className: videoMode === 'loop' ? 'active' : '', onClick: () => sel('videoMode', 'loop', t('modeLoop')) }, t('modeLoop')),
         ),
       ),
       React.createElement('span', { className: 'dt-hint' }, videoMode === 'loop' ? t('modeLoopHint') : t('modeFollowHint')),
       React.createElement('div', { className: 'dt-cardgrid' },
-        React.createElement('button', { className: 'dt-themecard' + (videoSrc === lockedDefault('video') ? ' active' : ''), onClick: () => set('videoSrc', lockedDefault('video'), '已切换到默认视频') },
+        React.createElement('button', { className: 'dt-themecard' + (videoSrc === lockedDefault('video') ? ' active' : ''), onClick: () => sel('videoSrc', lockedDefault('video'), '默认视频') },
           React.createElement('div', { className: 'swatch', style: { background: 'repeating-linear-gradient(135deg, #1b2230 0 12px, #141b28 12px 24px)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9aa4b2', fontSize: 20 } }, '🎬'),
           React.createElement('div', { className: 'name' }, '默认视频（不可删除）'),
           React.createElement('div', { className: 'sub' }, '受保护'),
         ),
         BUILTIN_VIDEOS.map((v) => React.createElement('button', {
-          key: v.id, className: 'dt-themecard' + (!videoSrc || videoSrc === DEFAULT_VIDEO_SRC ? ' active' : ''), onClick: () => set('videoSrc', DEFAULT_VIDEO_SRC, '已切换：视频 · ' + v.name),
+          key: v.id, className: 'dt-themecard' + (!videoSrc || videoSrc === DEFAULT_VIDEO_SRC ? ' active' : ''), onClick: () => sel('videoSrc', DEFAULT_VIDEO_SRC, v.name),
         },
           React.createElement('div', { className: 'swatch', style: { background: 'repeating-linear-gradient(135deg, #1b2230 0 12px, #141b28 12px 24px)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9aa4b2', fontSize: 20 } }, '🎬'),
           React.createElement('div', { className: 'name' }, v.name),
         )),
-        importedVideos.map((url) => React.createElement('div', { key: url, role: 'button', tabIndex: 0, className: 'dt-themecard dt-clickable' + (videoSrc === url ? ' active' : ''), onClick: () => set('videoSrc', url, '已切换到：' + skinName(url)) },
+        importedVideos.map((url) => React.createElement('div', { key: url, role: 'button', tabIndex: 0, className: 'dt-themecard dt-clickable' + (videoSrc === url ? ' active' : ''), onClick: () => sel('videoSrc', url, skinName(url)) },
           React.createElement('div', { className: 'swatch', style: { background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9aa4b2', fontSize: 20 } }, '🎬'),
           React.createElement('div', { className: 'name' }, skinName(url)),
           React.createElement('button', { className: 'dt-btn danger', onClick: (e) => { e.stopPropagation(); onDeleteImport('video', url) } }, confirmDel === ('video|' + url) ? '确认删除？' : t('delete')),
@@ -535,21 +535,21 @@ function ThemeManager({ scope, themeService, t }) {
     // 背景压暗（蒙层强度滑杆，默认 0 = 不压暗）
     backdrop ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid var(--dsw-alias-border-l1)', paddingTop: 14 } },
       React.createElement('span', { className: 'dt-label' }, t('dimLabel')),
-      React.createElement('input', { className: 'dt-slider', type: 'range', min: 0, max: 0.7, step: 0.05, value: sDim, onChange: (e) => setSliderDraft((d) => ({ ...(d || { dim, themeAlpha, dialogAlpha }), dim: parseFloat(e.target.value) })) }),
+      React.createElement('input', { className: 'dt-slider', type: 'range', min: 0, max: 0.7, step: 0.05, value: dim, onChange: (e) => setDraft('dim', parseFloat(e.target.value)) }),
       React.createElement('span', { className: 'dt-hint' }, t('maskHint')),
     ) : null,
 
     // 主题面板透明可调
     backdrop ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
       React.createElement('span', { className: 'dt-label' }, t('themeAlphaLabel')),
-      React.createElement('input', { className: 'dt-slider', type: 'range', min: 0, max: 1, step: 0.05, value: sThemeAlpha, onChange: (e) => setSliderDraft((d) => ({ ...(d || { dim, themeAlpha, dialogAlpha }), themeAlpha: parseFloat(e.target.value) })) }),
+      React.createElement('input', { className: 'dt-slider', type: 'range', min: 0, max: 1, step: 0.05, value: themeAlpha, onChange: (e) => setDraft('themeAlpha', parseFloat(e.target.value)) }),
       React.createElement('span', { className: 'dt-hint' }, t('themeAlphaHint')),
     ) : null,
 
     // 对话栏透明可调
     backdrop ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
       React.createElement('span', { className: 'dt-label' }, t('dialogAlphaLabel')),
-      React.createElement('input', { className: 'dt-slider', type: 'range', min: 0, max: 1, step: 0.05, value: sDialogAlpha, onChange: (e) => setSliderDraft((d) => ({ ...(d || { dim, themeAlpha, dialogAlpha }), dialogAlpha: parseFloat(e.target.value) })) }),
+      React.createElement('input', { className: 'dt-slider', type: 'range', min: 0, max: 1, step: 0.05, value: dialogAlpha, onChange: (e) => setDraft('dialogAlpha', parseFloat(e.target.value)) }),
       React.createElement('span', { className: 'dt-hint' }, t('dialogAlphaHint')),
     ) : null,
 
@@ -560,20 +560,16 @@ function ThemeManager({ scope, themeService, t }) {
         mode === 'video'
           ? React.createElement(VideoLoop, { src: videoSrc || DEFAULT_VIDEO_SRC })
           : React.createElement('div', { className: 'pbg', style: previewStyle }),
-        sDim > 0 ? React.createElement('div', { className: 'pmask', style: { background: `rgba(0,0,0,${sDim})` } }) : null,
+        dim > 0 ? React.createElement('div', { className: 'pmask', style: { background: `rgba(0,0,0,${dim})` } }) : null,
       ),
     ) : null,
 
     React.createElement('div', { style: { display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'flex-end' } },
-      React.createElement('button', { className: 'dt-btn', onClick: () => { const lockImg = lockedDefault('image'); const lockVid = lockedDefault('video'); setSliderDraft(null); set('mode', 'image'); set('builtinId', 'deep-space'); set('imageSrc', lockImg); set('imageFit', 'cover'); set('videoMode', 'follow'); set('videoSrc', lockVid); set('importedImages', []); set('importedVideos', []); set('dim', 0); set('themeAlpha', 1); set('dialogAlpha', 0); flash('已恢复默认主题') } }, t('reset')),
+      React.createElement('button', { className: 'dt-btn', onClick: () => { const lockImg = lockedDefault('image'); const lockVid = lockedDefault('video'); setDraftState({ mode: 'image', builtinId: 'deep-space', imageSrc: lockImg, imageFit: 'cover', videoMode: 'follow', videoSrc: lockVid, dim: 0, themeAlpha: 1, dialogAlpha: 0 }); scope.set('importedImages', []); scope.set('importedVideos', []); flash('已恢复默认，点「启用」生效') } }, t('reset')),
       React.createElement('button', { className: 'dt-btn primary', onClick: () => {
-        if (sliderDraft) {
-          // 滑块草稿：拖动仅改面板，点「启用」才一次性应用到全局背景层（避免高频 overrideTokens 卡顿）
-          scope.set('dim', sliderDraft.dim)
-          scope.set('themeAlpha', sliderDraft.themeAlpha)
-          scope.set('dialogAlpha', sliderDraft.dialogAlpha)
-          setSliderDraft(null)
-        }
+        // 把草稿中所有外观配置一次性写入 scope（React 自动批处理，一次生效）
+        Object.keys(draft).forEach((k) => scope.set(k, draft[k]))
+        setDraftState({})
         scope.set('enabled', true)
         flash('✓ 已应用：' + modeName() + appliedLabel)
       } }, t('apply')),
