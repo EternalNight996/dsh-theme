@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/screen/dsh-theme.gif" width="720" alt="dsh-theme theme skin demo" />
+  <img src="https://raw.githubusercontent.com/EternalNight996/dsh-theme/main/assets/screen/dsh-theme.gif" width="720" alt="dsh-theme theme skin demo" />
 </p>
 
 <div align="center">
@@ -15,7 +15,7 @@
 </div>
 
 <p align="center">
-  <img src="assets/screen/dsh-desktop.png" width="720" alt="Desktop screenshot" />
+  <img src="https://raw.githubusercontent.com/EternalNight996/dsh-theme/main/assets/screen/dsh-desktop.png" width="720" alt="Desktop screenshot" />
   <br/>
   <em>Desktop: background showing through + theme panel + light/dark</em>
 </p>
