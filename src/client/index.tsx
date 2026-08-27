@@ -68,7 +68,9 @@ const CSS = `
 .dt-preview .pmask { position: absolute; inset: 0; background: rgba(0,0,0,0.3); }
 
 /* sidebar footer button（照搬 dsh-memory-eternal 样式） */
+/* .dt-footer:not(.rail) 在 footer action 横向容器里占满整行，避免与「记忆」挤在一行 */
 .dt-footer { width: 100%; }
+.dt-footer:not(.rail) { flex: 0 0 100%; }
 .dt-footer-btn { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 10px; border: none; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 13.5px; line-height: 18px; border-radius: 8px; cursor: pointer; text-align: left; }
 .dt-footer-btn:hover { background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); }
 .dt-footer-btn:active { transform: translateY(0.5px); }
@@ -98,16 +100,16 @@ const ZH = {
   modeLoop: '循环播放',
   modeLoopHint: '视频自动循环播放，作为背景。',
   mask: '蒙层',
-  maskHint: '背景压暗（0 = 不压暗，拖动实时生效，仅影响背景不影响文字）。',
+  maskHint: '背景压暗（仅影响背景不影响文字）；拖动仅预览，点「启用」后应用。',
   delete: '删除',
   fit: '铺满方式',
   fitCover: '铺满 cover',
   fitContain: '完整 contain',
   dimLabel: '背景压暗',
   themeAlphaLabel: '主题面板透明',
-  themeAlphaHint: '0 = 面板全透（背景全透），1 = 面板实底；气泡/卡片随之调节。',
+  themeAlphaHint: '0 = 面板全透（背景全透），1 = 面板实底；气泡/卡片随之调节。拖动仅预览，点「启用」后应用。',
   dialogAlphaLabel: '对话栏透明',
-  dialogAlphaHint: '0 = 对话栏全透（背景透出），1 = 对话栏实底；设置/侧栏不受影响（独立实底）。',
+  dialogAlphaHint: '0 = 对话栏全透（背景透出），1 = 对话栏实底；设置/侧栏不受影响（独立实底）。拖动仅预览，点「启用」后应用。',
   preview: '预览',
   reset: '恢复默认',
   apply: '启用',
@@ -133,16 +135,16 @@ const EN = {
   modeLoop: 'Loop',
   modeLoopHint: 'Autoplay looping video as the background.',
   mask: 'Mask',
-  maskHint: 'Dims the background (0 = off; drag to live-dim; only affects the backdrop, not text).',
+  maskHint: 'Dims the backdrop (only affects the background, not text); drag to preview only, applied on "Apply".',
   delete: 'Delete',
   fit: 'Fit',
   fitCover: 'Cover',
   fitContain: 'Contain',
   dimLabel: 'Dim',
   themeAlphaLabel: 'Theme panels opacity',
-  themeAlphaHint: '0 = panels fully transparent (background shows), 1 = solid; bubbles/cards follow.',
+  themeAlphaHint: '0 = panels fully transparent (background shows), 1 = solid; bubbles/cards follow. Drag to preview only; applied on "Apply".',
   dialogAlphaLabel: 'Dialog opacity',
-  dialogAlphaHint: '0 = conversation fully transparent, 1 = solid; settings/sidebar stay solid (independent).',
+  dialogAlphaHint: '0 = conversation fully transparent, 1 = solid; settings/sidebar stay solid (independent). Drag to preview only; applied on "Apply".',
   preview: 'Preview',
   reset: 'Reset defaults',
   apply: 'Apply',
@@ -343,6 +345,7 @@ function ThemeManager({ scope, themeService, t }) {
   const [ready, setReady] = useState(false)
   const fileRef = useRef(null)
   const [confirmDel, setConfirmDel] = useState(null) // 'image' | 'video' | null：待确认删除
+  const [sliderDraft, setSliderDraft] = useState(null) // 滑块草稿：拖动只改面板预览，点「启用」才批量写入 scope（避免高频 overrideTokens 卡顿）
 
   useEffect(() => { if (value && !ready) setReady(true) }, [value, ready])
   useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current) }, [])
@@ -360,6 +363,10 @@ function ThemeManager({ scope, themeService, t }) {
   const dim = typeof value.dim === 'number' ? Math.min(0.7, Math.max(0, value.dim)) : 0
   const themeAlpha = typeof value.themeAlpha === 'number' ? Math.min(1, Math.max(0, value.themeAlpha)) : 1
   const dialogAlpha = typeof value.dialogAlpha === 'number' ? Math.min(1, Math.max(0, value.dialogAlpha)) : 0
+  // 滑块草稿值：优先取草稿，未拖动时回落到已应用值。
+  const sDim = sliderDraft ? sliderDraft.dim : dim
+  const sThemeAlpha = sliderDraft ? sliderDraft.themeAlpha : themeAlpha
+  const sDialogAlpha = sliderDraft ? sliderDraft.dialogAlpha : dialogAlpha
 
   const btheme = themeById(builtinId)
   const backdrop = isBackdropState(mode, btheme)
@@ -528,21 +535,21 @@ function ThemeManager({ scope, themeService, t }) {
     // 背景压暗（蒙层强度滑杆，默认 0 = 不压暗）
     backdrop ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid var(--dsw-alias-border-l1)', paddingTop: 14 } },
       React.createElement('span', { className: 'dt-label' }, t('dimLabel')),
-      React.createElement('input', { className: 'dt-slider', type: 'range', min: 0, max: 0.7, step: 0.05, value: dim, onChange: (e) => set('dim', parseFloat(e.target.value), t('dimLabel') + '：' + Math.round(e.target.value * 100) + '%') }),
+      React.createElement('input', { className: 'dt-slider', type: 'range', min: 0, max: 0.7, step: 0.05, value: sDim, onChange: (e) => setSliderDraft((d) => ({ ...(d || { dim, themeAlpha, dialogAlpha }), dim: parseFloat(e.target.value) })) }),
       React.createElement('span', { className: 'dt-hint' }, t('maskHint')),
     ) : null,
 
     // 主题面板透明可调
     backdrop ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
       React.createElement('span', { className: 'dt-label' }, t('themeAlphaLabel')),
-      React.createElement('input', { className: 'dt-slider', type: 'range', min: 0, max: 1, step: 0.05, value: themeAlpha, onChange: (e) => set('themeAlpha', parseFloat(e.target.value), t('themeAlphaLabel') + '：' + Math.round(e.target.value * 100) + '%') }),
+      React.createElement('input', { className: 'dt-slider', type: 'range', min: 0, max: 1, step: 0.05, value: sThemeAlpha, onChange: (e) => setSliderDraft((d) => ({ ...(d || { dim, themeAlpha, dialogAlpha }), themeAlpha: parseFloat(e.target.value) })) }),
       React.createElement('span', { className: 'dt-hint' }, t('themeAlphaHint')),
     ) : null,
 
     // 对话栏透明可调
     backdrop ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
       React.createElement('span', { className: 'dt-label' }, t('dialogAlphaLabel')),
-      React.createElement('input', { className: 'dt-slider', type: 'range', min: 0, max: 1, step: 0.05, value: dialogAlpha, onChange: (e) => set('dialogAlpha', parseFloat(e.target.value), t('dialogAlphaLabel') + '：' + Math.round(e.target.value * 100) + '%') }),
+      React.createElement('input', { className: 'dt-slider', type: 'range', min: 0, max: 1, step: 0.05, value: sDialogAlpha, onChange: (e) => setSliderDraft((d) => ({ ...(d || { dim, themeAlpha, dialogAlpha }), dialogAlpha: parseFloat(e.target.value) })) }),
       React.createElement('span', { className: 'dt-hint' }, t('dialogAlphaHint')),
     ) : null,
 
@@ -553,13 +560,23 @@ function ThemeManager({ scope, themeService, t }) {
         mode === 'video'
           ? React.createElement(VideoLoop, { src: videoSrc || DEFAULT_VIDEO_SRC })
           : React.createElement('div', { className: 'pbg', style: previewStyle }),
-        dim > 0 ? React.createElement('div', { className: 'pmask', style: { background: `rgba(0,0,0,${dim})` } }) : null,
+        sDim > 0 ? React.createElement('div', { className: 'pmask', style: { background: `rgba(0,0,0,${sDim})` } }) : null,
       ),
     ) : null,
 
     React.createElement('div', { style: { display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'flex-end' } },
-      React.createElement('button', { className: 'dt-btn', onClick: () => { const lockImg = lockedDefault('image'); const lockVid = lockedDefault('video'); set('mode', 'image'); set('builtinId', 'deep-space'); set('imageSrc', lockImg); set('imageFit', 'cover'); set('videoMode', 'follow'); set('videoSrc', lockVid); set('importedImages', []); set('importedVideos', []); set('dim', 0); set('themeAlpha', 1); set('dialogAlpha', 0); flash('已恢复默认主题') } }, t('reset')),
-      React.createElement('button', { className: 'dt-btn primary', onClick: () => { scope.set('enabled', true); flash('✓ 已应用：' + modeName() + appliedLabel) } }, t('apply')),
+      React.createElement('button', { className: 'dt-btn', onClick: () => { const lockImg = lockedDefault('image'); const lockVid = lockedDefault('video'); setSliderDraft(null); set('mode', 'image'); set('builtinId', 'deep-space'); set('imageSrc', lockImg); set('imageFit', 'cover'); set('videoMode', 'follow'); set('videoSrc', lockVid); set('importedImages', []); set('importedVideos', []); set('dim', 0); set('themeAlpha', 1); set('dialogAlpha', 0); flash('已恢复默认主题') } }, t('reset')),
+      React.createElement('button', { className: 'dt-btn primary', onClick: () => {
+        if (sliderDraft) {
+          // 滑块草稿：拖动仅改面板，点「启用」才一次性应用到全局背景层（避免高频 overrideTokens 卡顿）
+          scope.set('dim', sliderDraft.dim)
+          scope.set('themeAlpha', sliderDraft.themeAlpha)
+          scope.set('dialogAlpha', sliderDraft.dialogAlpha)
+          setSliderDraft(null)
+        }
+        scope.set('enabled', true)
+        flash('✓ 已应用：' + modeName() + appliedLabel)
+      } }, t('apply')),
     ),
 
     React.createElement('input', {

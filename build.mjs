@@ -7,7 +7,13 @@
 import { build } from 'esbuild'
 import { readFile, writeFile, rm } from 'node:fs/promises'
 
-const PACKAGE_ID = 'dsh-theme'
+// 注册 id 必须等于发布包名：DSH 的 client-modules 用 loader entry 的 name
+// （即 package.json name）作为模块 id 加载 /plugins/<name>/client.js，并期望
+// bundle 以同名 id 注册（见 dsh-client-modules 的 graphRow/arrive）。裸名
+// `dsh-theme` 会与 scoped 包名 `@eternalnight/dsh-theme` 不匹配而报
+// "loaded without registering" —— 其他 scoped 插件（官方 + billing 等）均注册
+// 完整包名，故这里从 package.json 的 name 派生，保持唯一真相源。
+const { name: PACKAGE_ID } = JSON.parse(await readFile(new URL('./package.json', import.meta.url), 'utf8'))
 
 // 共享运行时一律 external：由 DSH 的 __ModuleLoader__ 在运行时 require 注入，
 // 绝不能打进 bundle（否则会复制 React/Cordis 运行时身份）。

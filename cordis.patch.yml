@@ -7,7 +7,9 @@
 
 - insert:
     - id: dsh-theme
-      name: dsh-theme
+      # 必须是发布包名（scoped 全名）——loader 按此 specifier 从 profile 根 import，
+      # 裸名 `dsh-theme` 会解析失败（ERR_MODULE_NOT_FOUND）。
+      name: "@eternalnight/dsh-theme"
       config:
         enabled: true
         mode: image
