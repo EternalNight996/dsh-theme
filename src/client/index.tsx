@@ -205,29 +205,35 @@ function VideoFollow({ src, active }) {
     let lastSeek = 0
     let lastMove = performance.now()
     const IDLE_MS = 600
-    const SEEK_THROTTLE = 90 // ≈11Hz 真正 seek，1080p 下显著减少解码开销
-    const MIN_SEEK_DELTA = 0.035 // 秒，跳过微小位移，避免无谓 seek
+    const SEEK_THROTTLE = 60 // ≈16Hz 真正 seek：跟手性与解码开销的平衡
+    const MIN_SEEK_DELTA = 0.03 // 秒，跳过微小位移
+    const LERP = 0.3 // 加快插值，显著降低跟手滞后
     const DURATION = () => (Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 5)
 
+    let pending = 0           // seek 进行中记录的最新目标位置（欠帧，seek 完成后追平，不丢）
+    let pendingFlag = false
     const seekTo = (t) => {
       if (!Number.isFinite(t)) return
       if (document.hidden) return // 后台不 seek
       if (video.readyState < 2) return // 数据不足不 seek
       const now = performance.now()
+      if (video.seeking) { pending = t; pendingFlag = true; return } // 正在 seek：记录最新目标，避免丢弃
       if (now - lastSeek < SEEK_THROTTLE) return
-      if (video.seeking) return // 正在 seek，下一帧再试，避免堆积打断
       const next = t * DURATION()
       if (Math.abs(next - video.currentTime) > MIN_SEEK_DELTA) {
         video.currentTime = next
         lastSeek = now
       }
     }
+    const onSeeked = () => {
+      if (pendingFlag) { pendingFlag = false; seekTo(pending) } // 本次 seek 完成，立即追平最新位置
+    }
 
     const step = () => {
       let diff = target - current
       diff -= Math.round(diff)
       const done = Math.abs(diff) < 0.003
-      current = wrap01(current + diff * 0.14)
+      current = wrap01(current + diff * LERP)
       seekTo(current)
       // 到位且鼠标静止 → 停止 rAF 避免空转；后台窗口也停
       if (!document.hidden && !(done && performance.now() - lastMove > IDLE_MS)) {
@@ -252,11 +258,13 @@ function VideoFollow({ src, active }) {
     }
     window.addEventListener('mousemove', onMove, { passive: true })
     video.addEventListener('loadedmetadata', onLoaded, { once: true })
+    video.addEventListener('seeked', onSeeked)
     if (video.readyState >= 1) onLoaded()
     start()
     return () => {
       window.removeEventListener('mousemove', onMove)
       video.removeEventListener('loadedmetadata', onLoaded)
+      video.removeEventListener('seeked', onSeeked)
       if (raf) cancelAnimationFrame(raf)
     }
   }, [src, active])
