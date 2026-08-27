@@ -23,8 +23,9 @@
   "files": [
     "index.js",
     "lib",
-    "assets",
-    "docs",
+    "assets/backgrounds",
+    "assets/import-images",
+    "assets/import-videos",
     "cordis.patch.yml",
     "README.md",
     "README.en.md",

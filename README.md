@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/screen/dsh-theme.gif" width="720" alt="dsh-theme 主题皮肤演示" />
+  <img src="assets/screen/dsh-theme.gif" width="720" alt="dsh-theme 主题皮肤演示" />
 </p>
 
 <div align="center">
@@ -15,7 +15,7 @@
 </div>
 
 <p align="center">
-  <img src="docs/screen/dsh-desktop.png" width="720" alt="桌面效果截图" />
+  <img src="assets/screen/dsh-desktop.png" width="720" alt="桌面效果截图" />
   <br/>
   <em>桌面实拍：背景透出 + 主题面板 + 明暗适配</em>
 </p>
