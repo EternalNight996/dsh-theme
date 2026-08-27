@@ -28,7 +28,7 @@ export const Config = z.object({
   builtinId: z.string().default('deep-space'),
   imageSrc: z.string().default(LOCKED_DEFAULT_IMAGE), // 当前激活图片（受保护默认不可删）
   imageFit: z.union(['cover', 'contain']).default('cover'),
-  videoMode: z.union(['follow', 'loop']).default('follow'), // 跟随鼠标 / 循环播放
+  videoMode: z.union(['follow', 'loop']).default('follow'), // 跟随鼠标（需 GPU 硬解）/ 循环播放（不 seek 流畅）
   videoSrc: z.string().default(LOCKED_DEFAULT_VIDEO), // 当前激活视频（受保护默认不可删）
   importedImages: z.array(z.string()).default([]), // 导入的图片库（可删除，不含默认）
   importedVideos: z.array(z.string()).default([]), // 导入的视频库（可删除，不含默认）
