@@ -53,6 +53,34 @@ npm publish --registry=https://registry.npmjs.org/
 > 注意：本机 `npm config get registry` 可能是镜像（如 npmmirror），发布务必用
 > `--registry=https://registry.npmjs.org/` 或改回官方源，避免误发镜像。
 
+## 4.5 git 安装管路必配（防「每次安装各式各样问题」）
+
+若用户以 git 源安装（`github:EternalNight996/dsh-theme` 或 `git+https://...git`），且反复出现
+启动失败/版本错乱，**90% 是 profile 的 `pnpm-workspace.yaml` 没随新版更新**，与插件代码无关。
+请让用户确认下述 3 项（均在 `~/.dsh/profiles/<profile>/pnpm-workspace.yaml`）：
+
+```yaml
+allowBuilds:
+  # ① 放行本插件 git 源构建（缺它 → pnpm 拦停 git 安装）
+  'git+https://github.com/EternalNight996/dsh-theme.git': true
+
+minimumReleaseAgeExclude:
+  # ② 把豁免版本更新到当前发布版（留旧版 → npm 管路退到旧版）
+  - '@eternalnight/dsh-theme@<当前版本>'
+```
+
+③ 拉最新（重装/更新时 git 快照常停在旧版）：
+
+```bash
+dsh plugin --profile web update
+# 或
+dsh plugin --profile web add github:EternalNight996/dsh-theme
+```
+
+> 本插件**无 `prepare` script**，`dsh plugin` 不会自动重建 `lib/client.js`，依赖发布时已提交的
+> 同步产物——因此**发布者每次改 `src/` 后必须 `npm run build` 并提交 `lib/client.js`**，
+> 否则 git 用户会拿到「源码新、产物旧」的不一致包（这正是「各式各样问题」的常见来源）。
+
 ## 5. 更新版本
 
 ```bash
