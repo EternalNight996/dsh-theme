@@ -22,9 +22,10 @@ export const inject = ['settingsScope', 'slots', 'locale', 'theme']
 // ── CSS（用 --dsw-alias-* 主题变量，明暗原生适配）─────────────────────────
 const CSS = `
 .dt-bg { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
-.dt-bg-media, .dt-bg-gradient { position: absolute; inset: 0; }
+/* 提升为 GPU 合成层：视频/图片上屏走 GPU 合成，软解时帧不阻塞主线程（配合浏览器硬件加速解码） */
+.dt-bg-media, .dt-bg-gradient { position: absolute; inset: 0; will-change: transform; transform: translateZ(0); }
 .dt-bg-gradient { background-size: cover; background-position: center; }
-.dt-bg-media img, .dt-bg-media video { width: 100%; height: 100%; object-fit: cover; }
+.dt-bg-media img, .dt-bg-media video { width: 100%; height: 100%; object-fit: cover; backface-visibility: hidden; }
 .dt-bg-media.fit-contain img { object-fit: contain; }
 .dt-bg-mask { position: absolute; inset: 0; pointer-events: none; }
 .dt-fade { animation: dt-fade-in 0.45s ease-out; }
