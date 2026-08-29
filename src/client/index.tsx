@@ -305,86 +305,116 @@ function VideoSkin({ src, mode, active }) {
 
 // ── 3D 皮肤（Three.js 实时渲染，GPU 直出，跟手丝滑）────────────────────
 // v0.2.0 起内置「暗夜金属」程序化场景：金属反射几何 + 全景背景纹理 + 星点粒子 + 跟随鼠标 orbit + 点击波纹/脉冲。
-// Three.js 通过动态 import 懒加载，避免未启用 3D 模式时加载体积。
+// v0.2.1 修复：① 预检 WebGL 可用性 ② 可见的错误提示 ③ pointer-events:auto + z-index:0 让点击穿透父层穿透到 canvas
+// ④ 跳过 RoomEnvironment（未打进 bundle），用程序化 CubeTexture 替代 ⑤ 背景纹理客户端降采样（≤2048）
 function ThreeLayer({ sceneId, interact, orbitSpeed, pointerRange, bgTexture }) {
   const wrapRef = useRef(null)
-  const stateRef = useRef(null) // { renderer, scene, camera, mesh, clickT, baseScale, raf, dispose }
-  const [failed, setFailed] = useState(false)
+  const [errMsg, setErrMsg] = useState(null) // 屏幕可见错误（WebGL 不可用 / 初始化失败）
 
   useEffect(() => {
     if (!wrapRef.current) return undefined
     let mounted = true
     let cleanup = () => {}
 
+    // WebGL 预检：document.createElement('canvas').getContext('webgl2' || 'webgl')
+    const probe = document.createElement('canvas')
+    const gl = probe.getContext('webgl2') || probe.getContext('webgl')
+    if (!gl) {
+      setErrMsg('当前 WebView 不支持 WebGL（请检查 dsh-desktop 是否启用 GPU/硬件加速）')
+      return undefined
+    }
+    probe.remove()
+
     ;(async () => {
       try {
         const THREE = await import('three')
-        // Three.js r152+ 暴露 RoomEnvironment；老版无则跳过环境贴图。
-        let RoomEnvironment = null
-        try {
-          const mod = await import('three/examples/jsm/environments/RoomEnvironment.js')
-          RoomEnvironment = mod.RoomEnvironment
-        } catch { /* ignore */ }
         if (!mounted) return
 
         const wrap = wrapRef.current
-        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: 'high-performance' })
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
-        renderer.setSize(window.innerWidth, window.innerHeight)
-        renderer.setClearColor(0x000000, 0)
-        wrap.appendChild(renderer.domElement)
-        renderer.domElement.style.display = 'block'
-        renderer.domElement.style.width = '100%'
-        renderer.domElement.style.height = '100%'
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: 'high-performance', failIfMajorPerformanceCaveat: false })
+        try {
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75))
+          renderer.setSize(window.innerWidth, window.innerHeight)
+          renderer.setClearColor(0x000000, 0)
+          wrap.appendChild(renderer.domElement)
+        } catch (e) {
+          setErrMsg('WebGLRenderer 创建失败：' + (e && e.message || String(e)))
+          return
+        }
+        const canvas = renderer.domElement
+        // 关键修复：让 canvas 能接收点击/指针（父层 .dt-bg + .dt-bg-media 都是 pointer-events: none）
+        canvas.style.display = 'block'
+        canvas.style.width = '100%'
+        canvas.style.height = '100%'
+        canvas.style.position = 'absolute'
+        canvas.style.inset = '0'
+        canvas.style.pointerEvents = 'auto'
+        canvas.style.zIndex = '0'
+        canvas.setAttribute('aria-label', 'dsh-theme 3D 背景层（点击互动）')
+        canvas.setAttribute('role', 'img')
 
         const scene = new THREE.Scene()
-        // 全景背景纹理：用户 default.png 作为内部球面贴图（背景永远是图）
+
+        // 加载背景纹理（bgTexture = default.png 等），客户端降采样到 ≤2048 长边避免 GPU 显存爆炸
+        let skyTex = null
         if (bgTexture) {
           try {
-            const tex = await new Promise((resolve, reject) => {
-              new THREE.TextureLoader().load(bgTexture, resolve, undefined, reject)
-            })
-            tex.colorSpace = THREE.SRGBColorSpace || tex.colorSpace
-            const skyGeo = new THREE.SphereGeometry(50, 32, 16)
-            const skyMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, depthWrite: false, fog: false })
-            const sky = new THREE.Mesh(skyGeo, skyMat)
-            sky.renderOrder = -1
-            scene.add(sky)
-          } catch { /* 背景纹理加载失败不影响主体 */ }
+            skyTex = await loadScaledTexture(THREE, bgTexture, 2048)
+            if (skyTex) {
+              skyTex.colorSpace = THREE.SRGBColorSpace || skyTex.colorSpace
+              const skyGeo = new THREE.SphereGeometry(50, 32, 16)
+              const skyMat = new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, depthWrite: false, fog: false })
+              const sky = new THREE.Mesh(skyGeo, skyMat)
+              sky.renderOrder = -1
+              scene.add(sky)
+            }
+          } catch (e) {
+            console.warn('[dsh-theme] bg texture load failed:', e)
+          }
         }
 
-        // 金属反射环境贴图（让 metalness=0.9 有反射）——用 RoomEnvironment 或 PMREM 黑色环境
+        // 金属反射环境贴图：v0.2.0 用 RoomEnvironment（examples/jsm 子路径，esbuild 未打进 bundle）
+        // v0.2.1 改用程序化 CubeTexture（PMREMGenerator.fromScene 一组纯色 mesh），保证 bundle 自包含
         let envMap = null
-        if (RoomEnvironment) {
-          try {
-            const pmrem = new THREE.PMREMGenerator(renderer)
-            pmrem.compileEquirectangularShader()
-            const env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
-            envMap = env
-            scene.environment = envMap
-            pmrem.dispose()
-          } catch { /* ignore */ }
+        try {
+          const envScene = new THREE.Scene()
+          const eM = new THREE.MeshBasicMaterial({ side: THREE.BackSide })
+          // 6 面渐变（暗到亮），模拟摄影棚环境
+          eM.color.setRGB(0.4, 0.42, 0.46)
+          envScene.add(new THREE.Mesh(new THREE.SphereGeometry(50, 16, 8), eM))
+          // 几个亮源点缀（增强金属高光位置感）
+          ;['#dde2e8', '#a8b0c0', '#5b6273'].forEach((hex, i) => {
+            const lm = new THREE.MeshBasicMaterial({ color: hex })
+            const lmMesh = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), lm)
+            lmMesh.position.set(Math.cos(i * Math.PI * 2 / 3) * 12, Math.sin(i) * 4, Math.sin(i * Math.PI * 2 / 3) * 12)
+            lmMesh.lookAt(0, 0, 0)
+            envScene.add(lmMesh)
+          })
+          const pmrem = new THREE.PMREMGenerator(renderer)
+          envMap = pmrem.fromScene(envScene, 0.04).texture
+          scene.environment = envMap
+          pmrem.dispose()
+        } catch (e) {
+          console.warn('[dsh-theme] env map failed:', e)
         }
 
-        // 暗夜金属人物：用一个高反射金属球 + 第二个扭转的几何作为「人物剪影」
-        // 使用 IcosahedronGeometry（细节适中，性能可控）+ TorusKnotGeometry 作为副体。
+        // 暗夜金属人物：金属反射球 + 扭转几何副体
         const group = new THREE.Group()
         const bodyGeo = new THREE.IcosahedronGeometry(1.2, 1)
         const bodyMat = new THREE.MeshStandardMaterial({
           color: 0xb8c0cc,
-          metalness: 0.95,
-          roughness: 0.28,
+          metalness: 0.92,
+          roughness: 0.32,
           envMapIntensity: 1.4,
         })
         const body = new THREE.Mesh(bodyGeo, bodyMat)
         body.position.set(2.2, 0, 0)
         group.add(body)
-        // 副体：扭曲环（视觉层次）
         const knotGeo = new THREE.TorusKnotGeometry(0.6, 0.18, 80, 16)
         const knotMat = new THREE.MeshStandardMaterial({
           color: 0x88909c,
-          metalness: 0.9,
-          roughness: 0.35,
+          metalness: 0.88,
+          roughness: 0.38,
           envMapIntensity: 1.0,
         })
         const knot = new THREE.Mesh(knotGeo, knotMat)
@@ -392,8 +422,8 @@ function ThreeLayer({ sceneId, interact, orbitSpeed, pointerRange, bgTexture }) 
         group.add(knot)
         scene.add(group)
 
-        // 星点粒子（背景层次）
-        const starCount = 600
+        // 星点粒子
+        const starCount = 500
         const starGeo = new THREE.BufferGeometry()
         const starPos = new Float32Array(starCount * 3)
         for (let i = 0; i < starCount; i++) {
@@ -409,8 +439,8 @@ function ThreeLayer({ sceneId, interact, orbitSpeed, pointerRange, bgTexture }) 
         const stars = new THREE.Points(starGeo, starMat)
         scene.add(stars)
 
-        // 光照：环境光 + 方向光 + 冷暖补光
-        scene.add(new THREE.AmbientLight(0xffffff, 0.35))
+        // 光照
+        scene.add(new THREE.AmbientLight(0xffffff, 0.4))
         const key = new THREE.DirectionalLight(0xffffff, 1.1)
         key.position.set(4, 6, 5)
         scene.add(key)
@@ -422,24 +452,16 @@ function ThreeLayer({ sceneId, interact, orbitSpeed, pointerRange, bgTexture }) 
         camera.position.set(0, 0.5, 7)
         camera.lookAt(0, 0, 0)
 
-        // 状态（rAF 用）
         const state = {
           renderer, scene, camera, group, body, knot, stars,
-          az: 0,    // 方位角
-          polar: 0.2, // 俯仰
-          azTarget: 0, polarTarget: 0.2,
+          az: 0, polar: 0.2, azTarget: 0, polarTarget: 0.2,
           pointerX: 0, pointerY: 0,
-          clickT: 0, clickPulse: 0, // 点击脉冲
-          baseScale: 1,
+          clickT: 0, clickPulse: 0,
           orbitSpeed: orbitSpeed || 0.35,
           pointerRange: pointerRange || 0.4,
           interact: interact !== false,
           raf: 0,
-          onResize: null,
-          onPointer: null,
-          onClick: null,
         }
-        stateRef.current = state
 
         const onResize = () => {
           const w = window.innerWidth, h = window.innerHeight
@@ -447,39 +469,34 @@ function ThreeLayer({ sceneId, interact, orbitSpeed, pointerRange, bgTexture }) 
           camera.aspect = w / h
           camera.updateProjectionMatrix()
         }
-        state.onResize = onResize
         window.addEventListener('resize', onResize)
 
+        // pointermove 用 window，确保即使 canvas 在 z-index:0 也能收到
         const onPointer = (e) => {
           state.pointerX = (e.clientX / window.innerWidth) * 2 - 1
           state.pointerY = (e.clientY / window.innerHeight) * 2 - 1
           state.azTarget = state.pointerX * state.pointerRange * Math.PI * 0.6
           state.polarTarget = 0.2 + state.pointerY * state.pointerRange * 0.4
         }
-        state.onPointer = onPointer
         window.addEventListener('pointermove', onPointer, { passive: true })
 
-        const onClick = (e) => {
+        const onClick = () => {
           if (!state.interact) return
           state.clickT = performance.now()
           state.clickPulse = 1
         }
-        state.onClick = onClick
-        renderer.domElement.addEventListener('click', onClick)
+        canvas.addEventListener('click', onClick)
 
         const step = () => {
           state.raf = requestAnimationFrame(step)
-          // 自动 orbit + 鼠标驱动（阻尼）
           state.az += (state.azTarget - state.az) * 0.08
           state.polar += (state.polarTarget - state.polar) * 0.08
-          state.az += state.orbitSpeed * 0.005 // 自动慢转
-          // 相机围绕原点 orbit
+          state.az += state.orbitSpeed * 0.005
           const r = 7
           camera.position.x = Math.sin(state.az) * r * Math.cos(state.polar)
           camera.position.y = Math.sin(state.polar) * r
           camera.position.z = Math.cos(state.az) * r * Math.cos(state.polar)
           camera.lookAt(0, 0, 0)
-          // 点击脉冲衰减 + mesh 缩放
           if (state.clickPulse > 0) {
             const t = (performance.now() - state.clickT) / 600
             if (t >= 1) state.clickPulse = 0
@@ -488,11 +505,9 @@ function ThreeLayer({ sceneId, interact, orbitSpeed, pointerRange, bgTexture }) 
           const pulse = 1 + state.clickPulse * 0.08 * Math.sin((1 - state.clickPulse) * Math.PI)
           state.body.scale.setScalar(pulse)
           state.knot.scale.setScalar(pulse)
-          // emissive 脉冲（金属在点击瞬间微亮）
           const emi = state.clickPulse * 0.4
           state.body.material.emissiveIntensity = emi
           state.knot.material.emissiveIntensity = emi * 0.7
-          // 星点缓慢自转
           state.stars.rotation.y += 0.0003
           renderer.render(scene, camera)
         }
@@ -502,17 +517,18 @@ function ThreeLayer({ sceneId, interact, orbitSpeed, pointerRange, bgTexture }) 
           cancelAnimationFrame(state.raf)
           window.removeEventListener('resize', onResize)
           window.removeEventListener('pointermove', onPointer)
-          renderer.domElement.removeEventListener('click', onClick)
+          canvas.removeEventListener('click', onClick)
           try { bodyGeo.dispose(); bodyMat.dispose() } catch {}
           try { knotGeo.dispose(); knotMat.dispose() } catch {}
           try { starGeo.dispose(); starMat.dispose() } catch {}
+          try { if (skyTex) skyTex.dispose() } catch {}
+          try { if (envMap) envMap.dispose() } catch {}
           try { renderer.dispose() } catch {}
-          try { renderer.domElement.remove() } catch {}
-          if (envMap) try { envMap.dispose() } catch {}
+          try { canvas.remove() } catch {}
         }
       } catch (err) {
         console.error('[dsh-theme] ThreeLayer init failed:', err)
-        if (mounted) setFailed(true)
+        if (mounted) setErrMsg('3D 初始化失败：' + (err && err.message || String(err)))
       }
     })()
 
@@ -522,11 +538,55 @@ function ThreeLayer({ sceneId, interact, orbitSpeed, pointerRange, bgTexture }) 
     }
   }, [sceneId, interact, orbitSpeed, pointerRange, bgTexture])
 
-  if (failed) {
-    return React.createElement('div', { className: 'dt-bg-3d-fallback', style: { position: 'absolute', inset: 0, background: 'var(--dsw-alias-bg-base)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--dsw-alias-label-secondary)', fontSize: 12 } },
-      '3D 场景加载失败（WebGL 不可用？）')
+  if (errMsg) {
+    return React.createElement('div', {
+      className: 'dt-bg-3d-fallback',
+      style: {
+        position: 'absolute', inset: 0, zIndex: 1,
+        background: 'var(--dsw-alias-bg-base, #14181d)',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        color: 'var(--dsw-alias-label-secondary, #9aa4b2)',
+        fontSize: 12, padding: 16, textAlign: 'center', gap: 8,
+        pointerEvents: 'none',
+      },
+    },
+      React.createElement('div', { style: { fontWeight: 700, fontSize: 13 } }, '⚠ 3D 场景不可用'),
+      React.createElement('div', null, errMsg),
+    )
   }
-  return React.createElement('div', { ref: wrapRef, className: 'dt-bg-3d', style: { position: 'absolute', inset: 0, pointerEvents: 'auto' } })
+  return React.createElement('div', {
+    ref: wrapRef, className: 'dt-bg-3d',
+    style: { position: 'absolute', inset: 0, pointerEvents: 'auto', zIndex: 0 },
+  })
+}
+
+// 客户端降采样加载纹理（≤ maxSize 长边），避免 5404x3040 6MB 大图占满 GPU 显存。
+function loadScaledTexture(THREE, url, maxSize) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      try {
+        const w0 = img.naturalWidth || img.width
+        const h0 = img.naturalHeight || img.height
+        const scale = Math.min(1, maxSize / Math.max(w0, h0))
+        const w = Math.max(1, Math.round(w0 * scale))
+        const h = Math.max(1, Math.round(h0 * scale))
+        const c = document.createElement('canvas')
+        c.width = w; c.height = h
+        const ctx = c.getContext('2d')
+        ctx.imageSmoothingQuality = 'high'
+        ctx.drawImage(img, 0, 0, w, h)
+        const tex = new THREE.CanvasTexture(c)
+        tex.needsUpdate = true
+        tex.colorSpace = THREE.SRGBColorSpace || tex.colorSpace
+        resolve(tex)
+      } catch (e) { reject(e) }
+    }
+    img.onerror = (e) => reject(new Error('image load failed'))
+    img.src = url
+  })
 }
 
 // ── 背景层 ────────────────────────────────────────────────────────────────
