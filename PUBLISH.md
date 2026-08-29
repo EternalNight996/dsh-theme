@@ -81,7 +81,20 @@ dsh plugin --profile web add github:EternalNight996/dsh-theme
 > 同步产物——因此**发布者每次改 `src/` 后必须 `npm run build` 并提交 `lib/client.js`**，
 > 否则 git 用户会拿到「源码新、产物旧」的不一致包（这正是「各式各样问题」的常见来源）。
 
-## 5. 更新版本
+## 5. engines / peer 风险确认（C 项）
+
+已实测：
+- DSH 宿主 node = **v24.19.0** ≥ `engines.node: ">=22"` ✅
+- DSH 宿主 cordis = **4.0.1** = `peerDependencies["@deepseek-ai/cordis"]: "^4.0.1"` ✅
+- 两者当前**均不构成安装拦截**，无需改值（不为改而改）。
+
+用户侧快速检查（排除 engines/peer 问题）：
+```bash
+node -v                        # 需 >=22
+npm ls @deepseek-ai/cordis     # 需 4.x，且无 ERESOLVE 错误
+```
+
+## 6. 更新版本
 
 ```bash
 npm version patch && npm publish --registry=https://registry.npmjs.org/
