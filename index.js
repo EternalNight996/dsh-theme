@@ -23,14 +23,13 @@ export const inject = ['settings']
 
 export const Config = z.object({
   enabled: z.boolean().default(true),
-  // 四态互斥：builtin（内置主题）/ image（导入图片）/ video（视频：环绕跟随或循环播放）/ ocean（海景，WebGL 实时渲染）
-  mode: z.union(['builtin', 'image', 'video', 'ocean']).default('image'),
+  // 三态互斥：builtin（内置主题）/ image（导入图片）/ video（视频：环绕跟随或循环播放）
+  mode: z.union(['builtin', 'image', 'video']).default('image'),
   builtinId: z.string().default('deep-space'),
   imageSrc: z.string().default(LOCKED_DEFAULT_IMAGE), // 当前激活图片（受保护默认不可删）
   imageFit: z.union(['cover', 'contain']).default('cover'),
   videoMode: z.union(['follow', 'loop']).default('follow'), // 跟随鼠标（需 GPU 硬解）/ 循环播放（不 seek 流畅）
   videoSrc: z.string().default(LOCKED_DEFAULT_VIDEO), // 当前激活视频（受保护默认不可删）
-  oceanSpeed: z.number().min(0.5).max(3).default(1), // 海景场景循环速度（0.5=慢, 1=正常, 3=快）
   importedImages: z.array(z.string()).default([]), // 导入的图片库（可删除，不含默认）
   importedVideos: z.array(z.string()).default([]), // 导入的视频库（可删除，不含默认）
   dim: z.number().min(0).max(0.7).default(0), // 背景压暗（蒙层强度），0 = 完全不压暗

@@ -13,7 +13,6 @@
 import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { ASSET_BASE, BUILTIN_THEMES, BUILTIN_VIDEOS, DEFAULT_VIDEO_SRC, LOCKED_SKINS, themeById, themeImageUrl, translucentTokens } from '../../lib/themes.js'
-import OCEAN_FRAG from './ocean-frag.js'
 
 const NS = 'dsh-theme'
 const SOURCE = 'dsh-theme'
@@ -89,12 +88,7 @@ const ZH = {
   modeBuiltin: '内置主题',
   modeImage: '图片皮肤',
   modeVideo: '视频皮肤',
-  sectionDesc: '给 DSH Web GUI 换背景：内置主题 / 图片皮肤 / 视频皮肤（环绕跟随或循环播放）/ 海景皮肤（WebGL 实时渲染）。',
-  modeOcean: '海景',
-  oceanHint: 'WebGL 实时渲染的海面，随时间演绎 6 个场景（破晓/晨光/正午/黄昏/风暴/夜晚）。',
-  oceanSpeedLabel: '场景循环速度',
-  oceanSpeedHint: '控制 6 场景切换的快慢（0.5 = 慢, 1 = 正常, 3 = 快）。',
-  oceanClickHint: '点击海面触发轻微加亮脉冲。',
+  sectionDesc: '给 DSH Web GUI 换背景：内置主题 / 图片皮肤 / 视频皮肤（环绕跟随或循环播放）。',
   colorHint: '应用配色主题（明暗原生适配，换色不换布局）',
   backdropHint: '内置背景皮肤',
   noImage: '尚未导入图片，点击下方导入。',
@@ -129,12 +123,7 @@ const EN = {
   modeBuiltin: 'Built-in',
   modeImage: 'Image',
   modeVideo: 'Video',
-  sectionDesc: 'Change the DSH web GUI background: built-in themes / image / video (orbit-follow or loop) / ocean (WebGL real-time).',
-  modeOcean: 'Ocean',
-  oceanHint: 'WebGL real-time ocean, cycling through 6 scenes (predawn/dawn/midday/dusk/storm/night).',
-  oceanSpeedLabel: 'Scene cycle speed',
-  oceanSpeedHint: 'Controls the 6-scene cycle rate (0.5 = slow, 1 = normal, 3 = fast).',
-  oceanClickHint: 'Click the ocean to trigger a subtle brighten pulse.',
+  sectionDesc: 'Change the DSH web GUI background: built-in themes / image / video (orbit-follow or loop).',
   colorHint: 'App color themes (native light/dark; recolors, not relayouts)',
   backdropHint: 'Built-in backdrop skins',
   noImage: 'No image imported yet — import one below.',
@@ -293,137 +282,6 @@ function VideoSkin({ src, mode, active }) {
 }
 
 
-function OceanLayer({ interact, speed }) {
-  const wrapRef = useRef(null)
-  const [errMsg, setErrMsg] = useState(null)
-  const speedRef = useRef(typeof speed === 'number' && speed > 0 ? speed : 1)
-  useEffect(() => { speedRef.current = typeof speed === 'number' && speed > 0 ? speed : 1 }, [speed])
-
-  useEffect(() => {
-    if (!wrapRef.current) return undefined
-    const wrap = wrapRef.current
-    let raf = 0, prog = null, vao = null, buf = null, canvas = null
-    const clickT = { v: 0 }, clickPulse = { v: 0 }
-    const timeStart = performance.now() / 1000
-    let cancelled = false
-
-    const canvas2 = document.createElement('canvas')
-    const gl = canvas2.getContext('webgl2')
-    if (!gl) { setErrMsg('当前 WebView 不支持 WebGL2'); return undefined }
-
-    let vs, fs
-    try {
-      vs = gl.createShader(gl.VERTEX_SHADER)
-      gl.shaderSource(vs, `void main(){ gl_Position = vec4(position, 1.0); }`)
-      gl.compileShader(vs)
-      if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) throw new Error('VS: ' + gl.getShaderInfoLog(vs))
-      fs = gl.createShader(gl.FRAGMENT_SHADER)
-      gl.shaderSource(fs, OCEAN_FRAG)
-      gl.compileShader(fs)
-      if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) throw new Error('FS: ' + gl.getShaderInfoLog(fs))
-      prog = gl.createProgram()
-      gl.attachShader(prog, vs)
-      gl.attachShader(prog, fs)
-      gl.linkProgram(prog)
-      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error('LINK: ' + gl.getProgramInfoLog(prog))
-    } catch (e) {
-      setErrMsg('海景 shader 编译失败：' + (e && e.message || String(e)))
-      return undefined
-    }
-
-    buf = gl.createBuffer()
-    gl.bindBuffer(gl.ARRAY_BUFFER, buf)
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW)
-    vao = gl.createVertexArray()
-    gl.bindVertexArray(vao)
-    const aPos = gl.getAttribLocation(prog, 'position')
-    gl.enableVertexAttribArray(aPos)
-    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0)
-
-    const uR = gl.getUniformLocation(prog, 'uR')
-    const uT = gl.getUniformLocation(prog, 'uT')
-    const uS = gl.getUniformLocation(prog, 'uS')
-    const uSc = gl.getUniformLocation(prog, 'uSc')
-    const uBl = gl.getUniformLocation(prog, 'uBl')
-    const uClickPulse = gl.getUniformLocation(prog, 'uClickPulse')
-
-    const resize = () => {
-      const w = window.innerWidth, h = window.innerHeight
-      canvas2.width = Math.max(1, w)
-      canvas2.height = Math.max(1, h)
-      canvas2.style.width = w + 'px'
-      canvas2.style.height = h + 'px'
-      gl.viewport(0, 0, canvas2.width, canvas2.height)
-    }
-    canvas2.style.position = 'absolute'
-    canvas2.style.inset = '0'
-    canvas2.style.width = '100%'
-    canvas2.style.height = '100%'
-    canvas2.style.pointerEvents = 'auto'
-    canvas2.style.zIndex = '0'
-    canvas2.setAttribute('aria-label', 'dsh-theme 海景背景层（点击互动）')
-    canvas2.setAttribute('role', 'img')
-    wrap.appendChild(canvas2)
-    canvas = canvas2
-    resize()
-    window.addEventListener('resize', resize)
-
-    const onClick = () => {
-      if (interact === false) return
-      clickT.v = performance.now()
-      clickPulse.v = 1
-    }
-    canvas.addEventListener('click', onClick)
-
-    const step = () => {
-      if (cancelled) return
-      raf = requestAnimationFrame(step)
-      const tNow = performance.now() / 1000
-      const tElapsed = tNow - timeStart
-      const dur = 60 / speedRef.current
-      const cycleT = (tElapsed % dur) / dur
-      gl.useProgram(prog)
-      gl.bindVertexArray(vao)
-      gl.uniform2f(uR, canvas.width, canvas.height)
-      gl.uniform1f(uT, tElapsed)
-      gl.uniform1f(uS, cycleT)
-      gl.uniform1f(uSc, Math.min(5, Math.floor(cycleT * 6)))
-      gl.uniform1f(uBl, (cycleT * 6) - Math.floor(cycleT * 6))
-      if (clickPulse.v > 0) {
-        const dt = (performance.now() - clickT.v) / 600
-        clickPulse.v = dt >= 1 ? 0 : 1 - dt
-      }
-      gl.uniform1f(uClickPulse, clickPulse.v)
-      gl.drawArrays(gl.TRIANGLES, 0, 3)
-    }
-    raf = requestAnimationFrame(step)
-
-    return () => {
-      cancelled = true
-      cancelAnimationFrame(raf)
-      window.removeEventListener('resize', resize)
-      canvas.removeEventListener('click', onClick)
-      if (prog) gl.deleteProgram(prog)
-      if (buf) gl.deleteBuffer(buf)
-      if (vao) gl.deleteVertexArray(vao)
-      try { canvas.remove() } catch {}
-    }
-  }, [interact])
-
-  if (errMsg) {
-    return React.createElement('div', {
-      style: {
-        position: 'absolute', inset: 0, zIndex: 1,
-        background: 'var(--dsw-alias-bg-base, #14181d)', display: 'flex',
-        alignItems: 'center', justifyContent: 'center',
-        color: 'var(--dsw-alias-label-secondary, #9aa4b2)', fontSize: 12,
-        padding: 16, textAlign: 'center', pointerEvents: 'none', whiteSpace: 'pre-line',
-      },
-    }, '⚠ 海景不可用\n' + errMsg)
-  }
-  return React.createElement('div', { ref: wrapRef, style: { position: 'absolute', inset: 0, pointerEvents: 'auto', zIndex: 0 } })
-}
-
 // ── 背景层 ────────────────────────────────────────────────────────────────
 function BackgroundLayer({ scope, themeService, t }) {
   const snap = useScope(scope)
@@ -432,7 +290,6 @@ function BackgroundLayer({ scope, themeService, t }) {
   const imageFit = value && value.imageFit ? value.imageFit : 'cover'
   const videoMode = value && value.videoMode ? value.videoMode : 'follow'
   const videoSrc = (value && value.videoSrc) || DEFAULT_VIDEO_SRC
-  const oceanSpeed = value && typeof value.oceanSpeed === 'number' ? Math.min(3, Math.max(0.5, value.oceanSpeed)) : 1
   const dim = value && typeof value.dim === 'number' ? Math.min(0.7, Math.max(0, value.dim)) : 0
   const themeAlpha = value && typeof value.themeAlpha === 'number' ? Math.min(1, Math.max(0, value.themeAlpha)) : 0.75
   const dialogAlpha = value && typeof value.dialogAlpha === 'number' ? Math.min(1, Math.max(0, value.dialogAlpha)) : 0.8
@@ -466,11 +323,8 @@ function BackgroundLayer({ scope, themeService, t }) {
     if (mode === 'video') {
       return React.createElement(VideoSkin, { src: videoSrc, mode: videoMode, active: videoMode !== 'loop' })
     }
-    if (mode === 'ocean') {
-      return React.createElement(OceanLayer, { interact: true, speed: oceanSpeed })
-    }
     return null
-  }, [mode, btheme, imageSrc, imageFit, videoMode, videoSrc, oceanSpeed])
+  }, [mode, btheme, imageSrc, imageFit, videoMode, videoSrc])
 
   const maskEl = backdrop && dim > 0
     ? React.createElement('div', { className: 'dt-bg-mask', style: { background: `rgba(0,0,0,${dim})` } })
@@ -514,7 +368,6 @@ function ThemeManager({ scope, themeService, t }) {
   const imageFit = dv('imageFit', value.imageFit || 'cover')
   const videoMode = dv('videoMode', value.videoMode || 'follow')
   const videoSrc = dv('videoSrc', value.videoSrc || '')
-  const oceanSpeed = dv('oceanSpeed', typeof value.oceanSpeed === 'number' ? Math.min(3, Math.max(0.5, value.oceanSpeed)) : 1)
   const importedImages = value.importedImages && Array.isArray(value.importedImages) ? value.importedImages : []
   const importedVideos = value.importedVideos && Array.isArray(value.importedVideos) ? value.importedVideos : []
   const dim = dv('dim', typeof value.dim === 'number' ? Math.min(0.7, Math.max(0, value.dim)) : 0)
@@ -585,7 +438,7 @@ function ThemeManager({ scope, themeService, t }) {
     flash(kind === 'video' ? '已删除导入视频，回退默认；点「启用」应用' : '已删除导入图片，回退默认壁纸；点「启用」应用')
   }
 
-  const modeOptions = [['builtin', t('modeBuiltin')], ['image', t('modeImage')], ['video', t('modeVideo')], ['ocean', t('modeOcean')]]
+  const modeOptions = [['builtin', t('modeBuiltin')], ['image', t('modeImage')], ['video', t('modeVideo')]]
 
   const previewStyle = mode === 'builtin'
     ? (btheme.kind === 'backdrop' ? { backgroundImage: `url(${themeImageUrl(btheme)})` } : { background: btheme.bg })
@@ -685,17 +538,6 @@ function ThemeManager({ scope, themeService, t }) {
       ),
     ) : null,
 
-    // 海景皮肤（WebGL 实时渲染，仅 speed 可调）
-    mode === 'ocean' ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
-      React.createElement('span', { className: 'dt-hint' }, t('oceanHint')),
-      React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
-        React.createElement('span', { className: 'dt-label' }, t('oceanSpeedLabel')),
-        React.createElement('input', { className: 'dt-slider', type: 'range', min: 0.5, max: 3, step: 0.1, value: oceanSpeed, onChange: (e) => setDraft('oceanSpeed', parseFloat(e.target.value)) }),
-        React.createElement('span', { className: 'dt-hint' }, t('oceanSpeedHint')),
-      ),
-      React.createElement('span', { className: 'dt-hint' }, t('oceanClickHint')),
-    ) : null,
-
     // 背景压暗（蒙层强度滑杆，默认 0 = 不压暗）
     backdrop ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid var(--dsw-alias-border-l1)', paddingTop: 14 } },
       React.createElement('span', { className: 'dt-label' }, t('dimLabel')),
@@ -729,7 +571,7 @@ function ThemeManager({ scope, themeService, t }) {
     ) : null,
 
     React.createElement('div', { style: { display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'flex-end' } },
-      React.createElement('button', { className: 'dt-btn', onClick: () => { const lockImg = lockedDefault('image'); const lockVid = lockedDefault('video'); setDraftState({ mode: 'image', builtinId: 'deep-space', imageSrc: lockImg, imageFit: 'cover', videoMode: 'follow', videoSrc: lockVid, oceanSpeed: 1, dim: 0, themeAlpha: 1, dialogAlpha: 0 }); scope.set('importedImages', []); scope.set('importedVideos', []); flash('已恢复默认，点「启用」生效') } }, t('reset')),
+      React.createElement('button', { className: 'dt-btn', onClick: () => { const lockImg = lockedDefault('image'); const lockVid = lockedDefault('video'); setDraftState({ mode: 'image', builtinId: 'deep-space', imageSrc: lockImg, imageFit: 'cover', videoMode: 'follow', videoSrc: lockVid, dim: 0, themeAlpha: 1, dialogAlpha: 0 }); scope.set('importedImages', []); scope.set('importedVideos', []); flash('已恢复默认，点「启用」生效') } }, t('reset')),
       React.createElement('button', { className: 'dt-btn primary', onClick: () => {
         // 把草稿中所有外观配置一次性写入 scope（React 自动批处理，一次生效）
         Object.keys(draft).forEach((k) => scope.set(k, draft[k]))
