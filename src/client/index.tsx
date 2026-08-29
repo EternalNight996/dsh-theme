@@ -12,7 +12,7 @@
 
 import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
-import { ASSET_BASE, BUILTIN_THEMES, BUILTIN_VIDEOS, DEFAULT_VIDEO_SRC, LOCKED_SKINS, themeById, themeImageUrl, translucentTokens } from '../../lib/themes.js'
+import { ASSET_BASE, BUILTIN_THEMES, BUILTIN_VIDEOS, BUILTIN_3D, DEFAULT_VIDEO_SRC, LOCKED_SKINS, builtin3dById, themeById, themeImageUrl, translucentTokens } from '../../lib/themes.js'
 
 const NS = 'dsh-theme'
 const SOURCE = 'dsh-theme'
@@ -46,6 +46,8 @@ const CSS = `
 .dt-themecard .swatch { height: 60px; border-radius: 8px; }
 .dt-themecard .name { font-size: 12.5px; font-weight: 600; }
 .dt-themecard .sub { font-size: 10.5px; opacity: 0.6; }
+/* 3D 场景卡片 swatch 默认偏暗（金属渐变在 JSX inline style 中给出） */
+.dt-themecard .swatch[style*="radial-gradient"] { color: #b8c0cc; }
 .dt-clickable { cursor: pointer; }
 .dt-clickable:hover { border-color: var(--dsw-alias-brand-primary); }
 .dt-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -88,7 +90,7 @@ const ZH = {
   modeBuiltin: '内置主题',
   modeImage: '图片皮肤',
   modeVideo: '视频皮肤',
-  sectionDesc: '给 DSH Web GUI 换背景：内置主题 / 图片皮肤 / 视频皮肤（环绕跟随或循环播放）。',
+  sectionDesc: '给 DSH Web GUI 换背景：内置主题 / 图片皮肤 / 视频皮肤（环绕跟随或循环播放）/ 3D 皮肤（Three.js 实时 GPU 渲染）。',
   colorHint: '应用配色主题（明暗原生适配，换色不换布局）',
   backdropHint: '内置背景皮肤',
   noImage: '尚未导入图片，点击下方导入。',
@@ -102,6 +104,16 @@ const ZH = {
   modeLoopHint: '视频自动循环播放，作为背景。',
   mask: '蒙层',
   maskHint: '背景压暗（仅影响背景不影响文字）；拖动仅预览，点「启用」后应用。',
+  mode3d: '3D 皮肤',
+  threeHint: 'Three.js 实时 3D 渲染，GPU 直出，跟手丝滑。点击场景触发金属波纹+脉冲。',
+  threeRealtime: '实时 GPU 渲染',
+  threeInteractLabel: '点击互动',
+  threeOn: '开',
+  threeOff: '关',
+  threeOrbitLabel: '自动旋转速度',
+  threeOrbitHint: '0=不旋转；跟随鼠标 + 自动 orbit 阻尼。',
+  threePointerLabel: '鼠标驱动幅度',
+  threePointerHint: '鼠标移动驱动相机 orbit 的幅度（0=不跟随，1=全幅度）。',
   delete: '删除',
   fit: '铺满方式',
   fitCover: '铺满 cover',
@@ -123,7 +135,7 @@ const EN = {
   modeBuiltin: 'Built-in',
   modeImage: 'Image',
   modeVideo: 'Video',
-  sectionDesc: 'Change the DSH web GUI background: built-in themes / image / video (orbit-follow or loop).',
+  sectionDesc: 'Change the DSH web GUI background: built-in themes / image / video (orbit-follow or loop) / 3D skin (Three.js real-time GPU).',
   colorHint: 'App color themes (native light/dark; recolors, not relayouts)',
   backdropHint: 'Built-in backdrop skins',
   noImage: 'No image imported yet — import one below.',
@@ -137,6 +149,16 @@ const EN = {
   modeLoopHint: 'Autoplay looping video as the background.',
   mask: 'Mask',
   maskHint: 'Dims the backdrop (only affects the background, not text); drag to preview only, applied on "Apply".',
+  mode3d: '3D Skin',
+  threeHint: 'Three.js real-time 3D rendering, GPU direct, silky-smooth. Click triggers metal ripple + pulse.',
+  threeRealtime: 'Real-time GPU',
+  threeInteractLabel: 'Click interaction',
+  threeOn: 'On',
+  threeOff: 'Off',
+  threeOrbitLabel: 'Auto-orbit speed',
+  threeOrbitHint: '0 = no rotation; follows mouse + auto-orbit with damping.',
+  threePointerLabel: 'Pointer follow range',
+  threePointerHint: 'Mouse-driven orbit amplitude (0 = none, 1 = full).',
   delete: 'Delete',
   fit: 'Fit',
   fitCover: 'Cover',
@@ -281,6 +303,232 @@ function VideoSkin({ src, mode, active }) {
   return mode === 'loop' ? React.createElement(VideoLoop, { src }) : React.createElement(VideoFollow, { src, active })
 }
 
+// ── 3D 皮肤（Three.js 实时渲染，GPU 直出，跟手丝滑）────────────────────
+// v0.2.0 起内置「暗夜金属」程序化场景：金属反射几何 + 全景背景纹理 + 星点粒子 + 跟随鼠标 orbit + 点击波纹/脉冲。
+// Three.js 通过动态 import 懒加载，避免未启用 3D 模式时加载体积。
+function ThreeLayer({ sceneId, interact, orbitSpeed, pointerRange, bgTexture }) {
+  const wrapRef = useRef(null)
+  const stateRef = useRef(null) // { renderer, scene, camera, mesh, clickT, baseScale, raf, dispose }
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    if (!wrapRef.current) return undefined
+    let mounted = true
+    let cleanup = () => {}
+
+    ;(async () => {
+      try {
+        const THREE = await import('three')
+        // Three.js r152+ 暴露 RoomEnvironment；老版无则跳过环境贴图。
+        let RoomEnvironment = null
+        try {
+          const mod = await import('three/examples/jsm/environments/RoomEnvironment.js')
+          RoomEnvironment = mod.RoomEnvironment
+        } catch { /* ignore */ }
+        if (!mounted) return
+
+        const wrap = wrapRef.current
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: 'high-performance' })
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+        renderer.setSize(window.innerWidth, window.innerHeight)
+        renderer.setClearColor(0x000000, 0)
+        wrap.appendChild(renderer.domElement)
+        renderer.domElement.style.display = 'block'
+        renderer.domElement.style.width = '100%'
+        renderer.domElement.style.height = '100%'
+
+        const scene = new THREE.Scene()
+        // 全景背景纹理：用户 default.png 作为内部球面贴图（背景永远是图）
+        if (bgTexture) {
+          try {
+            const tex = await new Promise((resolve, reject) => {
+              new THREE.TextureLoader().load(bgTexture, resolve, undefined, reject)
+            })
+            tex.colorSpace = THREE.SRGBColorSpace || tex.colorSpace
+            const skyGeo = new THREE.SphereGeometry(50, 32, 16)
+            const skyMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, depthWrite: false, fog: false })
+            const sky = new THREE.Mesh(skyGeo, skyMat)
+            sky.renderOrder = -1
+            scene.add(sky)
+          } catch { /* 背景纹理加载失败不影响主体 */ }
+        }
+
+        // 金属反射环境贴图（让 metalness=0.9 有反射）——用 RoomEnvironment 或 PMREM 黑色环境
+        let envMap = null
+        if (RoomEnvironment) {
+          try {
+            const pmrem = new THREE.PMREMGenerator(renderer)
+            pmrem.compileEquirectangularShader()
+            const env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
+            envMap = env
+            scene.environment = envMap
+            pmrem.dispose()
+          } catch { /* ignore */ }
+        }
+
+        // 暗夜金属人物：用一个高反射金属球 + 第二个扭转的几何作为「人物剪影」
+        // 使用 IcosahedronGeometry（细节适中，性能可控）+ TorusKnotGeometry 作为副体。
+        const group = new THREE.Group()
+        const bodyGeo = new THREE.IcosahedronGeometry(1.2, 1)
+        const bodyMat = new THREE.MeshStandardMaterial({
+          color: 0xb8c0cc,
+          metalness: 0.95,
+          roughness: 0.28,
+          envMapIntensity: 1.4,
+        })
+        const body = new THREE.Mesh(bodyGeo, bodyMat)
+        body.position.set(2.2, 0, 0)
+        group.add(body)
+        // 副体：扭曲环（视觉层次）
+        const knotGeo = new THREE.TorusKnotGeometry(0.6, 0.18, 80, 16)
+        const knotMat = new THREE.MeshStandardMaterial({
+          color: 0x88909c,
+          metalness: 0.9,
+          roughness: 0.35,
+          envMapIntensity: 1.0,
+        })
+        const knot = new THREE.Mesh(knotGeo, knotMat)
+        knot.position.set(-1.5, -0.4, -0.8)
+        group.add(knot)
+        scene.add(group)
+
+        // 星点粒子（背景层次）
+        const starCount = 600
+        const starGeo = new THREE.BufferGeometry()
+        const starPos = new Float32Array(starCount * 3)
+        for (let i = 0; i < starCount; i++) {
+          const r = 18 + Math.random() * 22
+          const t = Math.random() * Math.PI * 2
+          const p = (Math.random() - 0.5) * Math.PI
+          starPos[i * 3] = r * Math.cos(p) * Math.cos(t)
+          starPos[i * 3 + 1] = r * Math.sin(p)
+          starPos[i * 3 + 2] = r * Math.cos(p) * Math.sin(t)
+        }
+        starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3))
+        const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.05, sizeAttenuation: true, transparent: true, opacity: 0.6, depthWrite: false })
+        const stars = new THREE.Points(starGeo, starMat)
+        scene.add(stars)
+
+        // 光照：环境光 + 方向光 + 冷暖补光
+        scene.add(new THREE.AmbientLight(0xffffff, 0.35))
+        const key = new THREE.DirectionalLight(0xffffff, 1.1)
+        key.position.set(4, 6, 5)
+        scene.add(key)
+        const rim = new THREE.DirectionalLight(0x88aaff, 0.6)
+        rim.position.set(-5, -3, -4)
+        scene.add(rim)
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100)
+        camera.position.set(0, 0.5, 7)
+        camera.lookAt(0, 0, 0)
+
+        // 状态（rAF 用）
+        const state = {
+          renderer, scene, camera, group, body, knot, stars,
+          az: 0,    // 方位角
+          polar: 0.2, // 俯仰
+          azTarget: 0, polarTarget: 0.2,
+          pointerX: 0, pointerY: 0,
+          clickT: 0, clickPulse: 0, // 点击脉冲
+          baseScale: 1,
+          orbitSpeed: orbitSpeed || 0.35,
+          pointerRange: pointerRange || 0.4,
+          interact: interact !== false,
+          raf: 0,
+          onResize: null,
+          onPointer: null,
+          onClick: null,
+        }
+        stateRef.current = state
+
+        const onResize = () => {
+          const w = window.innerWidth, h = window.innerHeight
+          renderer.setSize(w, h)
+          camera.aspect = w / h
+          camera.updateProjectionMatrix()
+        }
+        state.onResize = onResize
+        window.addEventListener('resize', onResize)
+
+        const onPointer = (e) => {
+          state.pointerX = (e.clientX / window.innerWidth) * 2 - 1
+          state.pointerY = (e.clientY / window.innerHeight) * 2 - 1
+          state.azTarget = state.pointerX * state.pointerRange * Math.PI * 0.6
+          state.polarTarget = 0.2 + state.pointerY * state.pointerRange * 0.4
+        }
+        state.onPointer = onPointer
+        window.addEventListener('pointermove', onPointer, { passive: true })
+
+        const onClick = (e) => {
+          if (!state.interact) return
+          state.clickT = performance.now()
+          state.clickPulse = 1
+        }
+        state.onClick = onClick
+        renderer.domElement.addEventListener('click', onClick)
+
+        const step = () => {
+          state.raf = requestAnimationFrame(step)
+          // 自动 orbit + 鼠标驱动（阻尼）
+          state.az += (state.azTarget - state.az) * 0.08
+          state.polar += (state.polarTarget - state.polar) * 0.08
+          state.az += state.orbitSpeed * 0.005 // 自动慢转
+          // 相机围绕原点 orbit
+          const r = 7
+          camera.position.x = Math.sin(state.az) * r * Math.cos(state.polar)
+          camera.position.y = Math.sin(state.polar) * r
+          camera.position.z = Math.cos(state.az) * r * Math.cos(state.polar)
+          camera.lookAt(0, 0, 0)
+          // 点击脉冲衰减 + mesh 缩放
+          if (state.clickPulse > 0) {
+            const t = (performance.now() - state.clickT) / 600
+            if (t >= 1) state.clickPulse = 0
+            else state.clickPulse = 1 - t
+          }
+          const pulse = 1 + state.clickPulse * 0.08 * Math.sin((1 - state.clickPulse) * Math.PI)
+          state.body.scale.setScalar(pulse)
+          state.knot.scale.setScalar(pulse)
+          // emissive 脉冲（金属在点击瞬间微亮）
+          const emi = state.clickPulse * 0.4
+          state.body.material.emissiveIntensity = emi
+          state.knot.material.emissiveIntensity = emi * 0.7
+          // 星点缓慢自转
+          state.stars.rotation.y += 0.0003
+          renderer.render(scene, camera)
+        }
+        state.raf = requestAnimationFrame(step)
+
+        cleanup = () => {
+          cancelAnimationFrame(state.raf)
+          window.removeEventListener('resize', onResize)
+          window.removeEventListener('pointermove', onPointer)
+          renderer.domElement.removeEventListener('click', onClick)
+          try { bodyGeo.dispose(); bodyMat.dispose() } catch {}
+          try { knotGeo.dispose(); knotMat.dispose() } catch {}
+          try { starGeo.dispose(); starMat.dispose() } catch {}
+          try { renderer.dispose() } catch {}
+          try { renderer.domElement.remove() } catch {}
+          if (envMap) try { envMap.dispose() } catch {}
+        }
+      } catch (err) {
+        console.error('[dsh-theme] ThreeLayer init failed:', err)
+        if (mounted) setFailed(true)
+      }
+    })()
+
+    return () => {
+      mounted = false
+      cleanup()
+    }
+  }, [sceneId, interact, orbitSpeed, pointerRange, bgTexture])
+
+  if (failed) {
+    return React.createElement('div', { className: 'dt-bg-3d-fallback', style: { position: 'absolute', inset: 0, background: 'var(--dsw-alias-bg-base)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--dsw-alias-label-secondary)', fontSize: 12 } },
+      '3D 场景加载失败（WebGL 不可用？）')
+  }
+  return React.createElement('div', { ref: wrapRef, className: 'dt-bg-3d', style: { position: 'absolute', inset: 0, pointerEvents: 'auto' } })
+}
+
 // ── 背景层 ────────────────────────────────────────────────────────────────
 function BackgroundLayer({ scope, themeService, t }) {
   const snap = useScope(scope)
@@ -293,6 +541,10 @@ function BackgroundLayer({ scope, themeService, t }) {
   const imageFit = value && value.imageFit ? value.imageFit : 'cover'
   const videoMode = value && value.videoMode ? value.videoMode : 'follow'
   const videoSrc = (value && value.videoSrc) || DEFAULT_VIDEO_SRC
+  const threeSceneId = value && value.threeSceneId ? value.threeSceneId : 'metal-figure'
+  const threeInteract = value && typeof value.threeInteract === 'boolean' ? value.threeInteract : true
+  const threeOrbitSpeed = value && typeof value.threeOrbitSpeed === 'number' ? Math.min(2, Math.max(0, value.threeOrbitSpeed)) : 0.35
+  const threePointerRange = value && typeof value.threePointerRange === 'number' ? Math.min(1, Math.max(0, value.threePointerRange)) : 0.4
   const dim = value && typeof value.dim === 'number' ? Math.min(0.7, Math.max(0, value.dim)) : 0
   const themeAlpha = value && typeof value.themeAlpha === 'number' ? Math.min(1, Math.max(0, value.themeAlpha)) : 0.75
   const dialogAlpha = value && typeof value.dialogAlpha === 'number' ? Math.min(1, Math.max(0, value.dialogAlpha)) : 0.8
@@ -326,8 +578,18 @@ function BackgroundLayer({ scope, themeService, t }) {
     if (mode === 'video') {
       return React.createElement(VideoSkin, { src: videoSrc, mode: videoMode, active: videoMode !== 'loop' })
     }
+    if (mode === '3d') {
+      const sc = builtin3dById(threeSceneId)
+      return React.createElement(ThreeLayer, {
+        sceneId: threeSceneId,
+        interact: threeInteract,
+        orbitSpeed: threeOrbitSpeed,
+        pointerRange: threePointerRange,
+        bgTexture: sc.bgTexture,
+      })
+    }
     return null
-  }, [mode, btheme, imageSrc, imageFit, videoMode, videoSrc])
+  }, [mode, btheme, imageSrc, imageFit, videoMode, videoSrc, threeSceneId, threeInteract, threeOrbitSpeed, threePointerRange])
 
   const maskEl = backdrop && dim > 0
     ? React.createElement('div', { className: 'dt-bg-mask', style: { background: `rgba(0,0,0,${dim})` } })
@@ -371,6 +633,14 @@ function ThemeManager({ scope, themeService, t }) {
   const imageFit = dv('imageFit', value.imageFit || 'cover')
   const videoMode = dv('videoMode', value.videoMode || 'follow')
   const videoSrc = dv('videoSrc', value.videoSrc || '')
+  const threeSceneId = dv('threeSceneId', value.threeSceneId || 'metal-figure')
+  const threeInteract = typeof value.threeInteract === 'boolean' ? value.threeInteract : true
+  const threeOrbitSpeed = typeof value.threeOrbitSpeed === 'number' ? Math.min(2, Math.max(0, value.threeOrbitSpeed)) : 0.35
+  const threePointerRange = typeof value.threePointerRange === 'number' ? Math.min(1, Math.max(0, value.threePointerRange)) : 0.4
+  // threeInteract/threeOrbitSpeed/threePointerRange 同样受 draft 覆盖（如果有的话）
+  const dThreeInteract = draft.threeInteract !== undefined ? draft.threeInteract : threeInteract
+  const dThreeOrbitSpeed = draft.threeOrbitSpeed !== undefined ? draft.threeOrbitSpeed : threeOrbitSpeed
+  const dThreePointerRange = draft.threePointerRange !== undefined ? draft.threePointerRange : threePointerRange
   const importedImages = value.importedImages && Array.isArray(value.importedImages) ? value.importedImages : []
   const importedVideos = value.importedVideos && Array.isArray(value.importedVideos) ? value.importedVideos : []
   const dim = dv('dim', typeof value.dim === 'number' ? Math.min(0.7, Math.max(0, value.dim)) : 0)
@@ -441,7 +711,7 @@ function ThemeManager({ scope, themeService, t }) {
     flash(kind === 'video' ? '已删除导入视频，回退默认；点「启用」应用' : '已删除导入图片，回退默认壁纸；点「启用」应用')
   }
 
-  const modeOptions = [['builtin', t('modeBuiltin')], ['image', t('modeImage')], ['video', t('modeVideo')]]
+  const modeOptions = [['builtin', t('modeBuiltin')], ['image', t('modeImage')], ['video', t('modeVideo')], ['3d', t('mode3d')]]
 
   const previewStyle = mode === 'builtin'
     ? (btheme.kind === 'backdrop' ? { backgroundImage: `url(${themeImageUrl(btheme)})` } : { background: btheme.bg })
@@ -541,6 +811,46 @@ function ThemeManager({ scope, themeService, t }) {
       ),
     ) : null,
 
+    // 3D 皮肤（Three.js 实时渲染，GPU 直出，跟手丝滑）
+    mode === '3d' ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
+      React.createElement('span', { className: 'dt-hint' }, t('threeHint')),
+      React.createElement('div', { className: 'dt-cardgrid' },
+        BUILTIN_3D.map((sc) => {
+          // swatch：3D 场景用渐变金属感预览（替代图片预览）
+          const swatch = {
+            background: `radial-gradient(120% 120% at 50% 40%, #2a3038 0%, #14181d 60%, #0a0c0f 100%)`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#9aa4b2', fontSize: 24,
+          }
+          return React.createElement('button', {
+            key: sc.id, className: 'dt-themecard' + (threeSceneId === sc.id ? ' active' : ''),
+            onClick: () => sel('threeSceneId', sc.id, sc.name),
+          },
+            React.createElement('div', { className: 'swatch', style: swatch }, '🔮'),
+            React.createElement('div', { className: 'name' }, sc.name),
+            React.createElement('div', { className: 'sub' }, t('threeRealtime')),
+          )
+        }),
+      ),
+      React.createElement('div', { className: 'dt-row' },
+        React.createElement('span', { className: 'dt-label' }, t('threeInteractLabel')),
+        React.createElement('div', { className: 'dt-seq' },
+          React.createElement('button', { className: dThreeInteract ? 'active' : '', onClick: () => sel('threeInteract', true, t('threeOn')) }, t('threeOn')),
+          React.createElement('button', { className: !dThreeInteract ? 'active' : '', onClick: () => sel('threeInteract', false, t('threeOff')) }, t('threeOff')),
+        ),
+      ),
+      React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
+        React.createElement('span', { className: 'dt-label' }, t('threeOrbitLabel')),
+        React.createElement('input', { className: 'dt-slider', type: 'range', min: 0, max: 2, step: 0.05, value: dThreeOrbitSpeed, onChange: (e) => setDraft('threeOrbitSpeed', parseFloat(e.target.value)) }),
+        React.createElement('span', { className: 'dt-hint' }, t('threeOrbitHint')),
+      ),
+      React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
+        React.createElement('span', { className: 'dt-label' }, t('threePointerLabel')),
+        React.createElement('input', { className: 'dt-slider', type: 'range', min: 0, max: 1, step: 0.05, value: dThreePointerRange, onChange: (e) => setDraft('threePointerRange', parseFloat(e.target.value)) }),
+        React.createElement('span', { className: 'dt-hint' }, t('threePointerHint')),
+      ),
+    ) : null,
+
     // 背景压暗（蒙层强度滑杆，默认 0 = 不压暗）
     backdrop ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid var(--dsw-alias-border-l1)', paddingTop: 14 } },
       React.createElement('span', { className: 'dt-label' }, t('dimLabel')),
@@ -574,7 +884,7 @@ function ThemeManager({ scope, themeService, t }) {
     ) : null,
 
     React.createElement('div', { style: { display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'flex-end' } },
-      React.createElement('button', { className: 'dt-btn', onClick: () => { const lockImg = lockedDefault('image'); const lockVid = lockedDefault('video'); setDraftState({ mode: 'image', builtinId: 'deep-space', imageSrc: lockImg, imageFit: 'cover', videoMode: 'follow', videoSrc: lockVid, dim: 0, themeAlpha: 1, dialogAlpha: 0 }); scope.set('importedImages', []); scope.set('importedVideos', []); flash('已恢复默认，点「启用」生效') } }, t('reset')),
+      React.createElement('button', { className: 'dt-btn', onClick: () => { const lockImg = lockedDefault('image'); const lockVid = lockedDefault('video'); setDraftState({ mode: 'image', builtinId: 'deep-space', imageSrc: lockImg, imageFit: 'cover', videoMode: 'follow', videoSrc: lockVid, threeSceneId: 'metal-figure', threeInteract: true, threeOrbitSpeed: 0.35, threePointerRange: 0.4, dim: 0, themeAlpha: 1, dialogAlpha: 0 }); scope.set('importedImages', []); scope.set('importedVideos', []); flash('已恢复默认，点「启用」生效') } }, t('reset')),
       React.createElement('button', { className: 'dt-btn primary', onClick: () => {
         // 把草稿中所有外观配置一次性写入 scope（React 自动批处理，一次生效）
         Object.keys(draft).forEach((k) => scope.set(k, draft[k]))

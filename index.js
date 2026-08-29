@@ -23,13 +23,17 @@ export const inject = ['settings']
 
 export const Config = z.object({
   enabled: z.boolean().default(true),
-  // 三态互斥：builtin（内置主题）/ image（导入图片）/ video（视频：环绕跟随或循环播放）
-  mode: z.union(['builtin', 'image', 'video']).default('image'),
+  // 四态互斥：builtin（内置主题）/ image（导入图片）/ video（视频：环绕跟随或循环播放）/ 3d（Three.js 实时 3D 渲染，GPU 直出，跟手丝滑）
+  mode: z.union(['builtin', 'image', 'video', '3d']).default('image'),
   builtinId: z.string().default('deep-space'),
   imageSrc: z.string().default(LOCKED_DEFAULT_IMAGE), // 当前激活图片（受保护默认不可删）
   imageFit: z.union(['cover', 'contain']).default('cover'),
   videoMode: z.union(['follow', 'loop']).default('follow'), // 跟随鼠标（需 GPU 硬解）/ 循环播放（不 seek 流畅）
   videoSrc: z.string().default(LOCKED_DEFAULT_VIDEO), // 当前激活视频（受保护默认不可删）
+  threeSceneId: z.string().default('metal-figure'), // 3D 场景：内置程序化场景 id（v0.2.0 起内置 metal-figure）
+  threeInteract: z.boolean().default(true), // 3D 模式点击互动（波纹+脉冲）
+  threeOrbitSpeed: z.number().min(0).max(2).default(0.35), // 3D 相机自动旋转速度（0=不旋转）
+  threePointerRange: z.number().min(0).max(1).default(0.4), // 鼠标驱动相机幅度（0=不跟随，1=全幅度）
   importedImages: z.array(z.string()).default([]), // 导入的图片库（可删除，不含默认）
   importedVideos: z.array(z.string()).default([]), // 导入的视频库（可删除，不含默认）
   dim: z.number().min(0).max(0.7).default(0), // 背景压暗（蒙层强度），0 = 完全不压暗
