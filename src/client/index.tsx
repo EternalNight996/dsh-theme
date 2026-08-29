@@ -286,6 +286,9 @@ function VideoSkin({ src, mode, active }) {
 function BackgroundLayer({ scope, themeService, t }) {
   const snap = useScope(scope)
   const value = snap && snap.value && typeof snap.value === 'object' ? snap.value : null
+  const enabled = value ? value.enabled !== false : true
+  const mode = value && value.mode ? value.mode : 'builtin'
+  const builtinId = value && value.builtinId ? value.builtinId : 'aurora'
   const imageSrc = (value && value.imageSrc) || ''
   const imageFit = value && value.imageFit ? value.imageFit : 'cover'
   const videoMode = value && value.videoMode ? value.videoMode : 'follow'
