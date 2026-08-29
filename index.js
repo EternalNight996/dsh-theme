@@ -23,8 +23,8 @@ export const inject = ['settings']
 
 export const Config = z.object({
   enabled: z.boolean().default(true),
-  // 三态互斥：builtin（内置主题）/ image（导入图片）/ video（视频：环绕跟随或循环播放）
-  mode: z.union(['builtin', 'image', 'video']).default('image'),
+  // 四态互斥：builtin（内置主题）/ image（导入图片）/ video（视频：环绕跟随或循环播放）/ ocean（海景，WebGL 实时渲染）
+  mode: z.union(['builtin', 'image', 'video', 'ocean']).default('image'),
   builtinId: z.string().default('deep-space'),
   imageSrc: z.string().default(LOCKED_DEFAULT_IMAGE), // 当前激活图片（受保护默认不可删）
   imageFit: z.union(['cover', 'contain']).default('cover'),
