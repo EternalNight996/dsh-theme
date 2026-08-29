@@ -1,6 +1,6 @@
 {
   "name": "@eternalnight/dsh-theme",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "DeepSeek Harness 主题皮肤插件：给 DSH Web GUI 换背景（内置主题 / 静态图片 / 动态视频环绕跟随帧），设置页与侧边栏底部一键切换。",
   "license": "MIT",
   "repository": {
@@ -57,8 +57,7 @@
     "@deepseek-ai/cordis": "^4.0.1"
   },
   "dependencies": {
-    "@deepseek-ai/schemastery": "^3.18.1",
-    "three": "^0.160.0"
+    "@deepseek-ai/schemastery": "^3.18.1"
   },
   "devDependencies": {
     "@types/react": "^18.3.1",
