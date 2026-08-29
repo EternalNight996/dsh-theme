@@ -303,10 +303,14 @@ function VideoSkin({ src, mode, active }) {
   return mode === 'loop' ? React.createElement(VideoLoop, { src }) : React.createElement(VideoFollow, { src, active })
 }
 
-// ── 3D 皮肤（Three.js 实时渲染，GPU 直出，跟手丝滑）────────────────────
-// v0.2.0 起内置「暗夜金属」程序化场景：金属反射几何 + 全景背景纹理 + 星点粒子 + 跟随鼠标 orbit + 点击波纹/脉冲。
-// v0.2.1 修复：① 预检 WebGL 可用性 ② 可见的错误提示 ③ pointer-events:auto + z-index:0 让点击穿透父层穿透到 canvas
-// ④ 跳过 RoomEnvironment（未打进 bundle），用程序化 CubeTexture 替代 ⑤ 背景纹理客户端降采样（≤2048）
+// ── 3D 皮肤：程序化粒子地球（pointsEarth inspired，零外部贴图依赖）────
+// v0.2.2 起：去掉「暗夜金属人物」默认 3D 皮肤，改为基于 pointsEarth 示例的程序化实现。
+// 灵感：https://z2586300277.github.io/three-cesium-examples/#/codeMirror?navigation=ThreeJS&classify=particle&id=pointsEarth
+// 实现要点：
+//   - IcosahedronGeometry(1, 12) → ~40k 顶点，用 Points + ShaderMaterial 渲染为粒子地球
+//   - 完全程序化：FBM 噪声生成陆地/海洋 alpha + 海拔 + 波浪位移；圆点 mask 用 gl_PointCoord
+//   - 0 外部贴图依赖 → bundle 自包含（避免 v0.2.1 那样的 RoomEnvironment 子路径问题）
+//   - 集成鼠标 orbit（azimuth/polar 阻尼）+ 点击脉冲（group 缩放）+ uTime 动画
 function ThreeLayer({ sceneId, interact, orbitSpeed, pointerRange, bgTexture }) {
   const wrapRef = useRef(null)
   const [errMsg, setErrMsg] = useState(null) // 屏幕可见错误（WebGL 不可用 / 初始化失败）
@@ -316,7 +320,7 @@ function ThreeLayer({ sceneId, interact, orbitSpeed, pointerRange, bgTexture }) 
     let mounted = true
     let cleanup = () => {}
 
-    // WebGL 预检：document.createElement('canvas').getContext('webgl2' || 'webgl')
+    // WebGL 预检
     const probe = document.createElement('canvas')
     const gl = probe.getContext('webgl2') || probe.getContext('webgl')
     if (!gl) {
@@ -342,7 +346,6 @@ function ThreeLayer({ sceneId, interact, orbitSpeed, pointerRange, bgTexture }) 
           return
         }
         const canvas = renderer.domElement
-        // 关键修复：让 canvas 能接收点击/指针（父层 .dt-bg + .dt-bg-media 都是 pointer-events: none）
         canvas.style.display = 'block'
         canvas.style.width = '100%'
         canvas.style.height = '100%'
@@ -355,112 +358,168 @@ function ThreeLayer({ sceneId, interact, orbitSpeed, pointerRange, bgTexture }) 
 
         const scene = new THREE.Scene()
 
-        // 加载背景纹理（bgTexture = default.png 等），客户端降采样到 ≤2048 长边避免 GPU 显存爆炸
-        let skyTex = null
-        if (bgTexture) {
-          try {
-            skyTex = await loadScaledTexture(THREE, bgTexture, 2048)
-            if (skyTex) {
-              skyTex.colorSpace = THREE.SRGBColorSpace || skyTex.colorSpace
-              const skyGeo = new THREE.SphereGeometry(50, 32, 16)
-              const skyMat = new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, depthWrite: false, fog: false })
-              const sky = new THREE.Mesh(skyGeo, skyMat)
-              sky.renderOrder = -1
-              scene.add(sky)
-            }
-          } catch (e) {
-            console.warn('[dsh-theme] bg texture load failed:', e)
+        // ── 程序化粒子地球（pointsEarth inspired）──────────────────────
+        // 顶点 shader：FBM 噪声生成陆地/海洋 alpha（>0.5=陆地）+ 海拔 + 海洋波浪位移
+        //              距离控制 gl_PointSize（近大远小）
+        // 片元 shader：圆形 mask（gl_PointCoord 距离中心>0.5 discard）+ 海洋深蓝 + 陆地 HSL 彩虹 + 海拔调整
+        const vertexShader = /* glsl */ `
+          uniform float size;
+          uniform float uTime;
+          uniform float uWaveHeight;
+          uniform float uWaveSpeed;
+          varying vec3 vPos;
+          varying float vAlpha;
+          varying float vElevation;
+          varying vec3 vNormal;
+
+          float random(vec3 st) {
+            return fract(sin(dot(st.xyz, vec3(12.9898,78.233,45.164))) * 43758.5453123);
           }
-        }
-
-        // 金属反射环境贴图：v0.2.0 用 RoomEnvironment（examples/jsm 子路径，esbuild 未打进 bundle）
-        // v0.2.1 改用程序化 CubeTexture（PMREMGenerator.fromScene 一组纯色 mesh），保证 bundle 自包含
-        let envMap = null
-        try {
-          const envScene = new THREE.Scene()
-          const eM = new THREE.MeshBasicMaterial({ side: THREE.BackSide })
-          // 6 面渐变（暗到亮），模拟摄影棚环境
-          eM.color.setRGB(0.4, 0.42, 0.46)
-          envScene.add(new THREE.Mesh(new THREE.SphereGeometry(50, 16, 8), eM))
-          // 几个亮源点缀（增强金属高光位置感）
-          ;['#dde2e8', '#a8b0c0', '#5b6273'].forEach((hex, i) => {
-            const lm = new THREE.MeshBasicMaterial({ color: hex })
-            const lmMesh = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), lm)
-            lmMesh.position.set(Math.cos(i * Math.PI * 2 / 3) * 12, Math.sin(i) * 4, Math.sin(i * Math.PI * 2 / 3) * 12)
-            lmMesh.lookAt(0, 0, 0)
-            envScene.add(lmMesh)
-          })
-          const pmrem = new THREE.PMREMGenerator(renderer)
-          envMap = pmrem.fromScene(envScene, 0.04).texture
-          scene.environment = envMap
-          pmrem.dispose()
-        } catch (e) {
-          console.warn('[dsh-theme] env map failed:', e)
-        }
-
-        // 暗夜金属人物：金属反射球 + 扭转几何副体
-        const group = new THREE.Group()
-        const bodyGeo = new THREE.IcosahedronGeometry(1.2, 1)
-        const bodyMat = new THREE.MeshStandardMaterial({
-          color: 0xb8c0cc,
-          metalness: 0.92,
-          roughness: 0.32,
-          envMapIntensity: 1.4,
+          float noise(vec3 st) {
+            vec3 i = floor(st);
+            vec3 f = fract(st);
+            float a = random(i);
+            float b = random(i + vec3(1.0, 0.0, 0.0));
+            float c = random(i + vec3(0.0, 1.0, 0.0));
+            float d = random(i + vec3(1.0, 1.0, 0.0));
+            float e = random(i + vec3(0.0, 0.0, 1.0));
+            float f1 = random(i + vec3(1.0, 0.0, 1.0));
+            float g = random(i + vec3(0.0, 1.0, 1.0));
+            float h = random(i + vec3(1.0, 1.0, 1.0));
+            vec3 u = f * f * (3.0 - 2.0 * f);
+            return mix(mix(mix(a, b, u.x), mix(c, d, u.x), u.y),
+                       mix(mix(e, f1, u.x), mix(g, h, u.x), u.y), u.z);
+          }
+          float fbm(vec3 st) {
+            float value = 0.0;
+            float amplitude = 0.5;
+            for (int i = 0; i < 5; i++) {
+              value += amplitude * noise(st);
+              st *= 2.0;
+              amplitude *= 0.5;
+            }
+            return value;
+          }
+          void main() {
+            vNormal = normalize(normalMatrix * normal);
+            vec3 p = normalize(position);
+            // 陆地/海洋阈值：基于球面坐标的 FBM（>0.5 = 陆地）
+            float landN = fbm(p * 2.5 + vec3(13.1, 7.7, 3.3));
+            float alphaLand = step(0.5, landN);
+            vAlpha = alphaLand;
+            // 海拔：陆地上 FBM（>0.5 部分）
+            float elev = (fbm(p * 5.0) - 0.5) * 2.0;
+            vElevation = elev * alphaLand;
+            vec3 newPosition = position;
+            if (alphaLand < 0.5) {
+              // 海洋波浪位移
+              float wave = uWaveHeight;
+              float speed = uWaveSpeed;
+              float displacement = (fbm(p * 4.0 + uTime * speed) * 2.0 - 1.0) * wave;
+              newPosition += normal * displacement;
+            }
+            vec4 mvPosition = modelViewMatrix * vec4(newPosition, 1.0);
+            // 距离控制点大小
+            float dist = length(mvPosition.xyz);
+            gl_PointSize = max(size * (1.0 - dist / 10.0), 1.0);
+            gl_Position = projectionMatrix * mvPosition;
+            vPos = newPosition;
+          }
+        `
+        const fragmentShader = /* glsl */ `
+          varying vec3 vPos;
+          varying float vAlpha;
+          varying float vElevation;
+          uniform float uClickPulse;
+          varying vec3 vNormal;
+          void main() {
+            // 圆形 mask（圆点精灵）
+            vec2 c = gl_PointCoord - vec2(0.5);
+            if (length(c) > 0.5) discard;
+            // 距离淡出（背面 / 远）
+            float backFade = clamp(dot(normalize(vNormal), vec3(0.0, 0.0, 1.0)), 0.15, 1.0);
+            vec3 color;
+            if (vAlpha > 0.5) {
+              // 陆地：HSL 按高度 + 经度色相
+              float lon = atan(vPos.y, vPos.x) / 6.28318;
+              float lat = (vPos.z + 1.0) * 0.5;
+              float hue = lon + vElevation * 0.3;
+              float sat = 0.65 + vElevation * 0.2;
+              float lig = 0.5 + vElevation * 0.25;
+              // 简化 HSL → RGB
+              float h = fract(hue);
+              float c1 = (1.0 - abs(2.0 * lig - 1.0)) * sat;
+              float x1 = c1 * (1.0 - abs(mod(h * 6.0, 2.0) - 1.0));
+              vec3 rgb;
+              if (h < 1.0/6.0) rgb = vec3(c1, x1, 0.0);
+              else if (h < 2.0/6.0) rgb = vec3(x1, c1, 0.0);
+              else if (h < 3.0/6.0) rgb = vec3(0.0, c1, x1);
+              else if (h < 4.0/6.0) rgb = vec3(0.0, x1, c1);
+              else if (h < 5.0/6.0) rgb = vec3(x1, 0.0, c1);
+              else rgb = vec3(c1, 0.0, x1);
+              color = rgb + vec3(lig - 0.5);
+              // 点击脉冲：陆地微亮
+              color += vec3(0.3, 0.4, 0.5) * uClickPulse * 0.6;
+            } else {
+              // 海洋：深蓝随海拔调整（波浪高度）
+              vec3 deep = vec3(0.004, 0.12, 0.30);
+              vec3 shallow = vec3(0.05, 0.30, 0.50);
+              float t = clamp(vElevation * 30.0 + 0.5, 0.0, 1.0);
+              color = mix(deep, shallow, t);
+              // 点击脉冲：海洋微亮
+              color += vec3(0.2, 0.4, 0.6) * uClickPulse * 0.6;
+            }
+            gl_FragColor = vec4(color * backFade, 1.0);
+          }
+        `
+        const pointsMat = new THREE.ShaderMaterial({
+          uniforms: {
+            size: { value: 4.0 },
+            uTime: { value: 0.0 },
+            uWaveHeight: { value: 0.06 },
+            uWaveSpeed: { value: 0.2 },
+            uClickPulse: { value: 0.0 },
+          },
+          vertexShader,
+          fragmentShader,
+          transparent: true,
+          depthWrite: true,
+          side: THREE.FrontSide,
         })
-        const body = new THREE.Mesh(bodyGeo, bodyMat)
-        body.position.set(2.2, 0, 0)
-        group.add(body)
-        const knotGeo = new THREE.TorusKnotGeometry(0.6, 0.18, 80, 16)
-        const knotMat = new THREE.MeshStandardMaterial({
-          color: 0x88909c,
-          metalness: 0.88,
-          roughness: 0.38,
-          envMapIntensity: 1.0,
-        })
-        const knot = new THREE.Mesh(knotGeo, knotMat)
-        knot.position.set(-1.5, -0.4, -0.8)
-        group.add(knot)
-        scene.add(group)
+        // IcosahedronGeometry(radius, detail)：detail 越高顶点数越多（detail=12 ≈ 40k 点）
+        const geo = new THREE.IcosahedronGeometry(1, 12)
+        const points = new THREE.Points(geo, pointsMat)
+        scene.add(points)
 
-        // 星点粒子
-        const starCount = 500
+        // 背景星点（细化视觉层次）
+        const starCount = 800
         const starGeo = new THREE.BufferGeometry()
         const starPos = new Float32Array(starCount * 3)
         for (let i = 0; i < starCount; i++) {
           const r = 18 + Math.random() * 22
-          const t = Math.random() * Math.PI * 2
-          const p = (Math.random() - 0.5) * Math.PI
-          starPos[i * 3] = r * Math.cos(p) * Math.cos(t)
-          starPos[i * 3 + 1] = r * Math.sin(p)
-          starPos[i * 3 + 2] = r * Math.cos(p) * Math.sin(t)
+          const th = Math.random() * Math.PI * 2
+          const ph = (Math.random() - 0.5) * Math.PI
+          starPos[i * 3] = r * Math.cos(ph) * Math.cos(th)
+          starPos[i * 3 + 1] = r * Math.sin(ph)
+          starPos[i * 3 + 2] = r * Math.cos(ph) * Math.sin(th)
         }
         starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3))
-        const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.05, sizeAttenuation: true, transparent: true, opacity: 0.6, depthWrite: false })
-        const stars = new THREE.Points(starGeo, starMat)
-        scene.add(stars)
-
-        // 光照
-        scene.add(new THREE.AmbientLight(0xffffff, 0.4))
-        const key = new THREE.DirectionalLight(0xffffff, 1.1)
-        key.position.set(4, 6, 5)
-        scene.add(key)
-        const rim = new THREE.DirectionalLight(0x88aaff, 0.6)
-        rim.position.set(-5, -3, -4)
-        scene.add(rim)
+        const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.04, sizeAttenuation: true, transparent: true, opacity: 0.5, depthWrite: false })
+        scene.add(new THREE.Points(starGeo, starMat))
 
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100)
-        camera.position.set(0, 0.5, 7)
+        camera.position.set(0, 0.5, 4)
         camera.lookAt(0, 0, 0)
 
         const state = {
-          renderer, scene, camera, group, body, knot, stars,
-          az: 0, polar: 0.2, azTarget: 0, polarTarget: 0.2,
-          pointerX: 0, pointerY: 0,
+          renderer, scene, camera, points, stars: scene.children.find((o) => o.isPoints && o !== points) || null, uniforms: pointsMat.uniforms,
+          az: 0, polar: 0.25, azTarget: 0, polarTarget: 0.25,
           clickT: 0, clickPulse: 0,
-          orbitSpeed: orbitSpeed || 0.35,
-          pointerRange: pointerRange || 0.4,
+          orbitSpeed: typeof orbitSpeed === 'number' ? orbitSpeed : 0.35,
+          pointerRange: typeof pointerRange === 'number' ? pointerRange : 0.4,
           interact: interact !== false,
           raf: 0,
+          autoSpin: 0, // 地球自转累加
         }
 
         const onResize = () => {
@@ -471,12 +530,11 @@ function ThreeLayer({ sceneId, interact, orbitSpeed, pointerRange, bgTexture }) 
         }
         window.addEventListener('resize', onResize)
 
-        // pointermove 用 window，确保即使 canvas 在 z-index:0 也能收到
         const onPointer = (e) => {
-          state.pointerX = (e.clientX / window.innerWidth) * 2 - 1
-          state.pointerY = (e.clientY / window.innerHeight) * 2 - 1
-          state.azTarget = state.pointerX * state.pointerRange * Math.PI * 0.6
-          state.polarTarget = 0.2 + state.pointerY * state.pointerRange * 0.4
+          const x = (e.clientX / window.innerWidth) * 2 - 1
+          const y = (e.clientY / window.innerHeight) * 2 - 1
+          state.azTarget = x * state.pointerRange * Math.PI * 0.6
+          state.polarTarget = 0.25 + y * state.pointerRange * 0.4
         }
         window.addEventListener('pointermove', onPointer, { passive: true })
 
@@ -489,26 +547,34 @@ function ThreeLayer({ sceneId, interact, orbitSpeed, pointerRange, bgTexture }) 
 
         const step = () => {
           state.raf = requestAnimationFrame(step)
+          // 鼠标阻尼 orbit
           state.az += (state.azTarget - state.az) * 0.08
           state.polar += (state.polarTarget - state.polar) * 0.08
+          // 自动慢转（az 增量 = orbitSpeed * dt）
           state.az += state.orbitSpeed * 0.005
-          const r = 7
+          state.autoSpin += state.orbitSpeed * 0.005
+          // 相机围绕原点 orbit
+          const r = 4
           camera.position.x = Math.sin(state.az) * r * Math.cos(state.polar)
           camera.position.y = Math.sin(state.polar) * r
           camera.position.z = Math.cos(state.az) * r * Math.cos(state.polar)
           camera.lookAt(0, 0, 0)
+          // 地球自转（绕 Y 轴）：旋转 points（不是 camera，camera 自己已 orbit）
+          state.points.rotation.y = state.autoSpin
+          // 点击脉冲衰减
           if (state.clickPulse > 0) {
             const t = (performance.now() - state.clickT) / 600
             if (t >= 1) state.clickPulse = 0
             else state.clickPulse = 1 - t
           }
-          const pulse = 1 + state.clickPulse * 0.08 * Math.sin((1 - state.clickPulse) * Math.PI)
-          state.body.scale.setScalar(pulse)
-          state.knot.scale.setScalar(pulse)
-          const emi = state.clickPulse * 0.4
-          state.body.material.emissiveIntensity = emi
-          state.knot.material.emissiveIntensity = emi * 0.7
-          state.stars.rotation.y += 0.0003
+          // group 整体脉冲缩放
+          const pulse = 1 + state.clickPulse * 0.06 * Math.sin((1 - state.clickPulse) * Math.PI)
+          state.points.scale.setScalar(pulse)
+          // uTime + 点击 pulse uniform
+          state.uniforms.uTime.value = performance.now() * 0.001
+          state.uniforms.uClickPulse.value = state.clickPulse
+          // 星空缓慢自转
+          if (state.stars) state.stars.rotation.y += 0.0003
           renderer.render(scene, camera)
         }
         state.raf = requestAnimationFrame(step)
@@ -518,11 +584,9 @@ function ThreeLayer({ sceneId, interact, orbitSpeed, pointerRange, bgTexture }) 
           window.removeEventListener('resize', onResize)
           window.removeEventListener('pointermove', onPointer)
           canvas.removeEventListener('click', onClick)
-          try { bodyGeo.dispose(); bodyMat.dispose() } catch {}
-          try { knotGeo.dispose(); knotMat.dispose() } catch {}
+          try { geo.dispose() } catch {}
+          try { pointsMat.dispose() } catch {}
           try { starGeo.dispose(); starMat.dispose() } catch {}
-          try { if (skyTex) skyTex.dispose() } catch {}
-          try { if (envMap) envMap.dispose() } catch {}
           try { renderer.dispose() } catch {}
           try { canvas.remove() } catch {}
         }
@@ -558,34 +622,6 @@ function ThreeLayer({ sceneId, interact, orbitSpeed, pointerRange, bgTexture }) 
   return React.createElement('div', {
     ref: wrapRef, className: 'dt-bg-3d',
     style: { position: 'absolute', inset: 0, pointerEvents: 'auto', zIndex: 0 },
-  })
-}
-
-// 客户端降采样加载纹理（≤ maxSize 长边），避免 5404x3040 6MB 大图占满 GPU 显存。
-function loadScaledTexture(THREE, url, maxSize) {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => {
-      try {
-        const w0 = img.naturalWidth || img.width
-        const h0 = img.naturalHeight || img.height
-        const scale = Math.min(1, maxSize / Math.max(w0, h0))
-        const w = Math.max(1, Math.round(w0 * scale))
-        const h = Math.max(1, Math.round(h0 * scale))
-        const c = document.createElement('canvas')
-        c.width = w; c.height = h
-        const ctx = c.getContext('2d')
-        ctx.imageSmoothingQuality = 'high'
-        ctx.drawImage(img, 0, 0, w, h)
-        const tex = new THREE.CanvasTexture(c)
-        tex.needsUpdate = true
-        tex.colorSpace = THREE.SRGBColorSpace || tex.colorSpace
-        resolve(tex)
-      } catch (e) { reject(e) }
-    }
-    img.onerror = (e) => reject(new Error('image load failed'))
-    img.src = url
   })
 }
 

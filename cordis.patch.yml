@@ -18,7 +18,7 @@
         imageFit: cover
         videoMode: follow
         videoSrc: '/dsh-theme/assets/import-videos/default.mp4'
-        threeSceneId: 'metal-figure'
+        threeSceneId: 'points-earth'
         threeInteract: true
         threeOrbitSpeed: 0.35
         threePointerRange: 0.4
